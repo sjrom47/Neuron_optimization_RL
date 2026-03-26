@@ -1,0 +1,17 @@
+cff-version: 1.2=0.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Chaitanya"
+  given-names: "Goswami"
+  orcid: https:"//orcid.org/0000-0001-9483-8821"
+- family-names: "Caldas-Martinez"
+  given-names: "Sara"
+- family-names: "Cao"
+  given-names: "Jiaming"
+- family-names: "Grover"
+  given-names: "Pulkit"
+title: "Code for Cell Specific Effects of Temporal Interference Stimulation on Cortical Function"
+version: 1.0.0
+doi: 10.5281/zenodo.12797409
+date-released: 2024-07-22
+url: "https://github.com/chaitanyagoswami/Cell-Specific-Effects-of-Temporal-Interference-Stimulation-on-Cortical-Function-Code/new/main"
