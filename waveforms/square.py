@@ -4,28 +4,47 @@ from waveforms.waveform import Waveform
 
 
 class SquareWaveform(Waveform):
-    def __init__(self, frequency, amplitude=1.0, pulse_width=1.0, delay=0.0):
+    def __init__(self, frequency, amplitude=1.0, duty_cycle=1.0, delay=0.0):
         self.frequency = frequency
         self.amplitude = amplitude
-        self.pulse_width = pulse_width
+        # Changed from pulse width to duty cycle because as a fraction of the period
+        # it is easier to handle constraints
+        self.duty_cycle = duty_cycle
         self.delay = delay
 
     @property
     def n_params(self):
-        return 4  # frequency, amplitude, pulse_width, delay
+        return 4  # frequency, amplitude, duty_cycle, delay
 
-    def _generate_waveform_points(self, duration, sampling_rate, params):
-        # TODO:
-        t_points = self.get_t_points(duration, sampling_rate)
-        waveform = np.zeros_like(t_points)
+    @property
+    def param_bounds(self):
+        # TODO: change to actual bounds for these parameters
+        return {
+            "frequency": (0.1, 1000.0),  # Hz
+            "amplitude": (0.0, 2000.0),  # mA
+            "duty_cycle": (0.001, 1.0),  # fraction of period
+            "delay": (0.0, 100.0),  # milliseconds
+        }
 
-        # Calculate the period of the square wave
-        period = 1.0 / self.frequency
+    def _resolve_params(self, params):
+        frequency = params.get("frequency", self.frequency)
+        amplitude = params.get("amplitude", self.amplitude)
+        duty_cycle = params.get("duty_cycle", self.duty_cycle)
+        delay = params.get("delay", self.delay)
+        period = 1.0 / frequency
 
-        # TODO: finish doing this
-        t_points -= self.delay  # Shift time points by the delay
-        waveform[t_points < self.pulse_width] = (
-            self.amplitude
-        )  # Set amplitude for points within pulse width
+        return {
+            "frequency": frequency,
+            "amplitude": amplitude,
+            "duty_cycle": duty_cycle,
+            "delay": delay,
+            "period": period,
+        }
 
-        return waveform
+    def _is_active(self, pulse_t, params):
+        period = params["period"]
+        duty_cycle = params["duty_cycle"]
+        return pulse_t >= 0 and (pulse_t % period) < duty_cycle * period
+
+    def _compute_value(self, pulse_t, params):
+        return [params["amplitude"] * len(pulse_t)]
