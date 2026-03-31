@@ -29,6 +29,7 @@ class FourierWaveform(Waveform):
         self.delay = delay
 
     def default_stimulation(self):
+        # TODO: set some default parameters for stimulation and return waveform and params
         return self.generate_waveform(duration=1.0, sampling_rate=1000)
 
     def _generate_waveform_points(self, duration, sampling_rate, params):
@@ -44,5 +45,20 @@ class FourierWaveform(Waveform):
         delay = params.get("delay", self.delay)
 
         t_points = self.get_t_points(duration, sampling_rate)
+        waveform_points = None
         # waveform_points = c0 + c1 * np.sin(2 * np.pi * f1 * t_points + phase_1) + c2 * np.sin(2 * np.pi * f2 * t_points + phase_2)
         # TODO: apply duty cycle and period
+
+        # TODO: return the generated waveform points and stimulation parameters for the RL model state
+        return waveform_points, {
+            "c0": c0,
+            "c1": c1,
+            "c2": c2,
+            "f1": f1,
+            "f2": f2,
+            "phase_1": phase_1,
+            "phase_2": phase_2,
+            "duty_cycle": duty_cycle,
+            "period": period,
+            "delay": delay,
+        }

@@ -12,4 +12,3 @@ class SelectivityCriterion(Criterion):
         # Implement the actual selectivity calculation logic here
         # This is a placeholder implementation
         return sum(waveform)  # Example: selectivity as sum of waveform values
-        return sum(waveform)  # Example: selectivity as sum of waveform values
