@@ -8,6 +8,7 @@ class Legendre3Waveform(Waveform):
     def __init__(
         self, c0, c1, c2, period=1.0, duty_cycle=0.5, delay=0.0, max_amplitude=2000.0
     ):
+        super().__init__(max_amplitude)
         self.c0 = c0
         self.c1 = c1
         self.c2 = c2
@@ -15,6 +16,21 @@ class Legendre3Waveform(Waveform):
         self.duty_cycle = duty_cycle
         self.delay = delay
         self.max_amplitude = max_amplitude
+
+    @property
+    def n_params(self):
+        return 6  # c0, c1, c2, period, duty_cycle, delay
+
+    @property
+    def param_bounds(self):
+        return {
+            "c0": (-self.max_amplitude, self.max_amplitude),
+            "c1": (-self.max_amplitude, self.max_amplitude),
+            "c2": (-self.max_amplitude, self.max_amplitude),
+            "period": (0.001, 100.0),  # seconds
+            "duty_cycle": (0.0, 1.0),  # fraction of period
+            "delay": (0.0, 100.0),  # milliseconds
+        }
 
     def _resolve_params(self, params):
         c0 = params.get("c0", self.c0)
@@ -33,10 +49,10 @@ class Legendre3Waveform(Waveform):
             "delay": delay,
         }
 
-    def _is_active(self, pulse_t, params):
+    def _is_active(self, t, params):
         period = params["period"]
         duty_cycle = params["duty_cycle"]
-        return pulse_t >= 0 and (pulse_t % period) < duty_cycle * period
+        return t >= 0 and (t % period) < duty_cycle * period
 
     def _compute_value(self, pulse_t, params):
         phase = (pulse_t - min(pulse_t)) / (
@@ -46,7 +62,5 @@ class Legendre3Waveform(Waveform):
         legendre_values = legval(
             phase_legendre_domain, [params["c0"], params["c1"], params["c2"]]
         )
-        legendre_values = np.clip(
-            legendre_values, -self.max_amplitude, self.max_amplitude
-        )
+        legendre_values = legendre_values
         return legendre_values

@@ -1,12 +1,16 @@
+import os
 import random
 
+import numpy as np
 from gymnasium import Env, spaces
 
+from elec_field import ICMS
+from neuron_model_serial import NeuronSim
 from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 
 class NEURONEnv(Env):
-    def __init__(self, waveform_type, criterion, max_actions=10):
+    def __init__(self, waveform_type, criterion, max_actions=10, sampling_rate=1e6):
         super().__init__()
         self.waveform_type = waveform_type
         self.criterion = criterion
@@ -15,10 +19,10 @@ class NEURONEnv(Env):
         self.state = spaces.Dict(
             {
                 "electrode_radius": spaces.Box(
-                    low=0.0, high=1.0, shape=(), dtype=float
+                    low=0.5, high=1.5, shape=(), dtype=float
                 ),  # TODO: change to actual bounds
-                "angle_1": spaces.Box(low=0.0, high=1.0, shape=(), dtype=float),
-                "angle_2": spaces.Box(low=0.0, high=1.0, shape=(), dtype=float),
+                "theta": spaces.Box(low=0.0, high=2 * np.pi, shape=(), dtype=float),
+                "phi": spaces.Box(low=0.0, high=np.pi, shape=(), dtype=float),
                 "neuron_type": spaces.Discrete(2),  # Assuming 2 neuron types
                 # TODO: change actual bounds and types for these parameters
                 "last_waveform_params": spaces.Box(
@@ -32,6 +36,7 @@ class NEURONEnv(Env):
         )
         self.actions_taken = 0
         self.max_actions = max_actions
+        self.sampling_rate = sampling_rate
 
     def init_waveform(self, **kwargs):
         if self.waveform_type == "fourier":
@@ -44,11 +49,11 @@ class NEURONEnv(Env):
             raise ValueError(f"Unsupported waveform type: {self.waveform_type}")
 
     def step(self, action):
-        waveform = self.waveform.generate_waveform(
-            **action, duration=1.0, sampling_rate=1000
+        waveform, params = self.waveform.generate_waveform(
+            duration=1.0, sampling_rate=self.sampling_rate, params=action
         )
         response = self.simulate_neuron_response(waveform)
-        reward = self.criterion(response)
+        reward = self.criterion.evaluate(response)
 
         # TODO: update state based on response and/or action
 
@@ -59,20 +64,75 @@ class NEURONEnv(Env):
         return self.state, reward, terminated, truncated, {}
 
     def simulate_neuron_response(self, waveform):
-        # TODO: make a function that calls neuron behind the scenes
-        pass
+        time_array = np.arange(len(waveform)) / self.sampling_rate
+        waveform2 = np.zeros_like(waveform)
+
+        self.neuron.stimulate(
+            time_array=time_array,
+            waveform=waveform,
+            waveform2=waveform2,
+            scale1=1,
+            sampling_rate=self.sampling_rate,
+            delay_init=2000,
+            delay_final=5,
+        )
+        soma_recording, _ = self.neuron.save_soma_recording(delay_init=2000)
+        return soma_recording
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
-        # TODO: actual bounds do not reflect reality here
-        self.state[0] = random.randrange(0.0, 1.0)  # Radius of electrode
-        self.state[1] = random.randrange(0.0, 1.0)  # Angle 1
-        self.state[2] = random.randrange(0.0, 1.0)  # Angle 2
-        self.state[3] = random.choice(
+
+        self.state["electrode_radius"] = random.uniform(0.5, 1.5)
+        self.state["theta"] = random.uniform(0.0, 2 * np.pi)
+        self.state["phi"] = random.uniform(0.0, np.pi)
+
+        # TODO: fix this
+        self.state["neuron_type"] = random.choice(
             list(range(self.state["neuron_type"].n))
         )  # Neuron type
 
-        # TODO: see neuron initialization (setting neuron parameters)
+        r = float(self.state["electrode_radius"])
+        theta = float(self.state["theta"])
+        phi = float(self.state["phi"])
+        x = r * np.sin(phi) * np.cos(theta)
+        y = r * np.sin(phi) * np.sin(theta)
+        z = r * np.cos(phi)
+
+        elec_field = ICMS(x=x, y=y, z=z, conductivity=0.33)
+
+        self.neuron = NeuronSim(
+            human_or_mice=0,
+            cell_id=self.state["neuron_type"],
+            temp=37,
+            dt=0.025,
+            elec_field=elec_field,
+            elec_field2=None,
+        )
+        self.neuron._set_xtra_param(
+            angle=np.array([0, 0]), pos_neuron=np.array([0, 0, 0])
+        )
+
+        delay_init, delay_final = 2000, 5
+        save_state = os.path.join(
+            os.getcwd(),
+            "cells/SaveState/human_or_mice0cell-"
+            + str(self.state["neuron_type"])
+            + "_Temp-37C_dt-25.0us_delay-2000ms.bin",
+        )
+        if not os.path.exists(save_state):
+            n_samples = int(delay_init / (0.025 * 1e-3 * self.sampling_rate)) + 1
+            time_array = np.arange(n_samples) / self.sampling_rate
+            amp_array = np.zeros(n_samples)
+            self.neuron.stimulate(
+                time_array=time_array,
+                amp_array=amp_array,
+                amp_array2=amp_array.copy(),
+                sampling_rate=self.sampling_rate,
+                delay_init=delay_init,
+                delay_final=delay_final,
+                save_state_show=False,
+            )
+
         default_waveform = self.waveform.default_stimulation()
         response = self.simulate_neuron_response(default_waveform)
 

@@ -16,7 +16,9 @@ class FourierWaveform(Waveform):
         phase_1=0.0,
         phase_2=0.0,
         delay=0.0,
+        max_amplitude=2000.0,
     ):
+        super().__init__(max_amplitude)
         self.c0 = c0
         self.c1 = c1
         self.c2 = c2
@@ -27,38 +29,60 @@ class FourierWaveform(Waveform):
         self.phase_1 = phase_1
         self.phase_2 = phase_2
         self.delay = delay
+        self.max_amplitude = max_amplitude
 
-    def default_stimulation(self):
-        # TODO: set some default parameters for stimulation and return waveform and params
-        return self.generate_waveform(duration=1.0, sampling_rate=1000)
+    @property
+    def n_params(self):
+        return 10  # c0, c1, c2, f1, f2, duty_cycle, period, phase_1, phase_2, delay
 
-    def _generate_waveform_points(self, duration, sampling_rate, params):
-        c0 = params.get("c0", self.c0)
-        c1 = params.get("c1", self.c1)
-        c2 = params.get("c2", self.c2)
-        f1 = params.get("f1", self.f1)
-        f2 = params.get("f2", self.f2)
-        phase_1 = params.get("phase_1", self.phase_1)
-        phase_2 = params.get("phase_2", self.phase_2)
-        duty_cycle = params.get("duty_cycle", self.duty_cycle)
-        period = params.get("period", self.period)
-        delay = params.get("delay", self.delay)
-
-        t_points = self.get_t_points(duration, sampling_rate)
-        waveform_points = None
-        # waveform_points = c0 + c1 * np.sin(2 * np.pi * f1 * t_points + phase_1) + c2 * np.sin(2 * np.pi * f2 * t_points + phase_2)
-        # TODO: apply duty cycle and period
-
-        # TODO: return the generated waveform points and stimulation parameters for the RL model state
-        return waveform_points, {
-            "c0": c0,
-            "c1": c1,
-            "c2": c2,
-            "f1": f1,
-            "f2": f2,
-            "phase_1": phase_1,
-            "phase_2": phase_2,
-            "duty_cycle": duty_cycle,
-            "period": period,
-            "delay": delay,
+    @property
+    def param_bounds(self):
+        return {
+            "c0": (-self.max_amplitude, self.max_amplitude),
+            "c1": (-self.max_amplitude, self.max_amplitude),
+            "c2": (-self.max_amplitude, self.max_amplitude),
+            "f1": (0.001, 100.0),  # Hz
+            "f2": (0.001, 100.0),  # Hz
+            "duty_cycle": (0.0, 1.0),  # fraction of period
+            "period": (0.001, 100.0),  # seconds
+            "phase_1": (0.0, 2 * np.pi),  # radians
+            "phase_2": (0.0, 2 * np.pi),  # radians
+            "delay": (0.0, 100.0),  # milliseconds
         }
+
+    def _resolve_params(self, params):
+        return {
+            "c0": params.get("c0", self.c0),
+            "c1": params.get("c1", self.c1),
+            "c2": params.get("c2", self.c2),
+            "f1": params.get("f1", self.f1),
+            "f2": params.get("f2", self.f2),
+            "duty_cycle": params.get("duty_cycle", self.duty_cycle),
+            "period": params.get("period", self.period),
+            "phase_1": params.get("phase_1", self.phase_1),
+            "phase_2": params.get("phase_2", self.phase_2),
+            "delay": params.get("delay", self.delay),
+        }
+
+    def _is_active(self, t, params):
+        period = params["period"]
+        duty_cycle = params["duty_cycle"]
+        return t >= 0 and (t % period) < duty_cycle * period
+
+    def _compute_value(self, pulse_t, params):
+        t = pulse_t
+        c0 = params["c0"]
+        c1 = params["c1"]
+        c2 = params["c2"]
+        f1 = params["f1"]
+        f2 = params["f2"]
+        phase_1 = params["phase_1"]
+        phase_2 = params["phase_2"]
+
+        return np.clip(
+            c0
+            + c1 * np.sin(2 * np.pi * f1 * t + phase_1)
+            + c2 * np.sin(2 * np.pi * f2 * t + phase_2),
+            -self.max_amplitude,
+            self.max_amplitude,
+        )
