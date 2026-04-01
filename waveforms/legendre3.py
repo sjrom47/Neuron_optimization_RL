@@ -6,7 +6,14 @@ from waveforms.waveform import Waveform
 
 class Legendre3Waveform(Waveform):
     def __init__(
-        self, c0, c1, c2, period=1.0, duty_cycle=0.5, delay=0.0, max_amplitude=2000.0
+        self,
+        c0=0.5,
+        c1=0.5,
+        c2=0.5,
+        period=1.0,
+        duty_cycle=0.5,
+        delay=0.0,
+        max_amplitude=2000.0,
     ):
         super().__init__(max_amplitude)
         self.c0 = c0

@@ -6,7 +6,7 @@ from waveforms.waveform import Waveform
 class SquareWaveform(Waveform):
     def __init__(
         self,
-        frequency,
+        frequency=100.0,
         amplitude=100.0,
         duty_cycle=1.0,
         delay=0.0,

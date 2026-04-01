@@ -2,13 +2,12 @@ from criterions.criterion import Criterion
 
 
 class SelectivityCriterion(Criterion):
-    # TODO: see how to implement several wavefors without breaking the interface
-    def evaluate(self, waveform):
-        # Placeholder for selectivity calculation
-        selectivity = self._calculate_selectivity(waveform)
-        return selectivity
+    @property
+    def requires_multiple_responses(self):
+        return True
 
-    def _calculate_selectivity(self, waveform):
-        # Implement the actual selectivity calculation logic here
-        # This is a placeholder implementation
-        return sum(waveform)  # Example: selectivity as sum of waveform values
+    def evaluate(self, responses):
+        # Placeholder for selectivity calculation
+        # TODO:  implement actual selectivity formula
+        selectivity = ...
+        return selectivity

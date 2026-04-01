@@ -2,7 +2,7 @@ from waveforms.waveform import Waveform
 
 
 class FullSequenceWaveform(Waveform):
-    def __init__(self, duration, sampling_rate, max_amplitude=2000.0):
+    def __init__(self, duration=1.0, sampling_rate=1e6, max_amplitude=2000.0):
         super().__init__(max_amplitude)
         self.duration = duration
         self.sampling_rate = sampling_rate
