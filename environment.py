@@ -7,6 +7,7 @@ from gymnasium import Env, spaces
 from criterions import MinEnergy, SelectivityCriterion
 from elec_field import ICMS
 from neuron_model_serial import NeuronSim
+from utils import firing_rate
 from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 
@@ -15,33 +16,72 @@ class NEURONEnv(Env):
         self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e6
     ):
         super().__init__()
+
+        self.neuron_types = [6, 7, 35, 36]
+
         self.criterion = self.init_criterion(criterion_type)
+        # TODO: we will have to actually see if we use the 4 neuron types or we decide to use more
+        self.n_neuron_state_params = (
+            3 * len(self.neuron_types)
+            if self.criterion.requires_multiple_responses
+            else 3
+        )
 
         self.waveform = self.init_waveform(waveform_type)
-        self.state = spaces.Dict(
+        # self.state = spaces.Dict(
+        #     {
+        #         "electrode_radius": spaces.Box(
+        #             low=0.5, high=1.5, shape=(), dtype=float
+        #         ),
+        #         "theta": spaces.Box(low=0.0, high=2 * np.pi, shape=(), dtype=float),
+        #         "phi": spaces.Box(low=0.0, high=np.pi, shape=(), dtype=float),
+        #         "neuron_type": spaces.Discrete(4),  # Assuming 4 neuron types
+        #         "last_waveform_params": spaces.Box(
+        #             low=-1.0, high=1.0, shape=(self.waveform.n_params,), dtype=float
+        #         ),
+        #         "last_stimulation_params": spaces.Box(
+        #             low=-1e6, high=1e6, shape=(self.n_neuron_state_params,), dtype=float
+        #         ),
+        #     }
+        # )
+
+        self.observation_space = spaces.Dict(
             {
                 "electrode_radius": spaces.Box(
                     low=0.5, high=1.5, shape=(), dtype=float
                 ),
                 "theta": spaces.Box(low=0.0, high=2 * np.pi, shape=(), dtype=float),
                 "phi": spaces.Box(low=0.0, high=np.pi, shape=(), dtype=float),
-                "neuron_type": spaces.Discrete(4),  # Assuming 4 neuron types
-                # TODO: change actual bounds and types for these parameters
+                "neuron_type": spaces.Discrete(4),
                 "last_waveform_params": spaces.Box(
                     low=-1.0, high=1.0, shape=(self.waveform.n_params,), dtype=float
                 ),
                 # TODO: change to actual bounds and types for these parameters
                 # also consider multi neuron criterions
                 "last_stimulation_params": spaces.Box(
-                    low=-1.0, high=1.0, shape=(2,), dtype=float
+                    low=-1e6, high=1e6, shape=(self.n_neuron_state_params,), dtype=float
                 ),
             }
         )
+
+        # Separate plain dict to hold actual observation values
+        self.state = {
+            "electrode_radius": np.float64(0.0),
+            "theta": np.float64(0.0),
+            "phi": np.float64(0.0),
+            "neuron_type": 0,
+            "last_waveform_params": np.zeros(self.waveform.n_params, dtype=float),
+            "last_stimulation_params": np.zeros(
+                self.n_neuron_state_params, dtype=float
+            ),
+        }
+        self.action_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(self.waveform.n_params,), dtype=float
+        )
+
         self.actions_taken = 0
         self.max_actions = max_actions
         self.sampling_rate = sampling_rate
-
-        self.neuron_types = [6, 7, 35, 36]
 
     def init_waveform(self, waveform_type, **kwargs):
         if waveform_type == "fourier":
@@ -81,7 +121,14 @@ class NEURONEnv(Env):
         responses = self.get_neuron_responses(waveform)
         reward = self.criterion.evaluate(responses)
 
-        # TODO: update state based on response and/or action
+        self.state["last_waveform_params"] = np.array(
+            [params[key] for key in self.waveform.param_bounds.keys()]
+        )
+
+        stimulation_params = self.get_stimulation_params(
+            responses[0]
+        )  # Get params for the first response
+        self.state["last_stimulation_params"] = np.array(stimulation_params)
 
         self.actions_taken += 1
         terminated = self.actions_taken >= self.max_actions
@@ -130,8 +177,8 @@ class NEURONEnv(Env):
 
         self.neuron.stimulate(
             time_array=time_array,
-            waveform=waveform,
-            waveform2=waveform2,
+            amp_array=waveform,
+            amp_array2=waveform2,
             scale1=1,
             sampling_rate=self.sampling_rate,
             delay_init=2000,
@@ -140,14 +187,28 @@ class NEURONEnv(Env):
         soma_recording, _ = self.neuron.save_soma_recording(delay_init=2000)
         return soma_recording
 
+    def get_stimulation_params(self, response):
+        fr = firing_rate(response, np.arange(len(response)) / self.sampling_rate)
+        peak_vm = np.max(response)
+        last_mp = response[-1]
+        return fr, peak_vm, last_mp
+
+    def default_stimulation(self):
+        default_params = {key: 0.0 for key in self.waveform.param_bounds.keys()}
+        default_waveform, _ = self.waveform.generate_waveform(
+            duration=1.0, sampling_rate=self.sampling_rate, params=default_params
+        )
+        return default_waveform
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
-        self.state["electrode_radius"] = random.uniform(0.5, 1.5)
-        self.state["theta"] = random.uniform(0.0, 2 * np.pi)
-        self.state["phi"] = random.uniform(0.0, np.pi)
+        self.actions_taken = 0
 
-        self.state["neuron_type"] = random.choice(self.neuron_types)  # Neuron type
+        self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
+        self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
+        self.state["phi"] = np.float64(random.uniform(0.0, np.pi))
+        self.state["neuron_type"] = int(random.choice(self.neuron_types))
 
         r = float(self.state["electrode_radius"])
         theta = float(self.state["theta"])
@@ -158,13 +219,26 @@ class NEURONEnv(Env):
 
         self.elec_field = ICMS(x=x, y=y, z=z, conductivity=0.33)
 
-        default_waveform = self.waveform.default_stimulation()
-        response = self.simulate_neuron_response(default_waveform)
+        default_waveform = self.default_stimulation()
+        response = self.simulate_neuron_response(
+            default_waveform, self.state["neuron_type"]
+        )
 
-        # TODO: transform response into something useful for the agent (e.g. firing rate, latency, etc.)
-        # TODO: Add that info into the state representation
+        neuron_stimulation_params = []
+        base_neuron_stimulation_params = self.get_stimulation_params(response)
+        neuron_stimulation_params.extend(base_neuron_stimulation_params)
 
-        # TODO: Add stimulation parameters into the state representation
-        # TODO: see how to handle variable number of parameters for different waveforms (Fourier has more parameters than square for example)
+        if self.criterion.requires_multiple_responses:
+            for neuron_type in self.neuron_types:
+                if neuron_type == self.state["neuron_type"]:
+                    continue  # Skip the already computed response for the selected neuron type
+                response = self.simulate_neuron_response(default_waveform, neuron_type)
+                params = self.get_stimulation_params(response)
+                neuron_stimulation_params.extend(params)
+        self.state["last_stimulation_params"] = np.array(neuron_stimulation_params)
 
-        return self.state
+        self.state["last_waveform_params"] = np.zeros(
+            self.waveform.n_params
+        )  # No previous waveform parameters at reset
+
+        return self.state, {}

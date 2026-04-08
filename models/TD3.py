@@ -1,10 +1,12 @@
-from stable_baselines3 import TD3
-from stable_baselines3.common.noise import NormalActionNoise
-from stable_baselines3.common.evaluation import evaluate_policy
-import numpy as np
 import gymnasium
+import numpy as np
+from stable_baselines3 import TD3
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.noise import NormalActionNoise
+
 from criterions import MinEnergy, SelectivityCriterion
-from environment import NeuronEnv
+from environment import NEURONEnv
+
 
 class TD3Class:
     def __init__(self, env, waveform, criterion, lr, sigma, timesteps):
@@ -15,8 +17,12 @@ class TD3Class:
         self.sigma = sigma
         self.timesteps = timesteps
         n_actions = self.env.action_space.shape[0]
-        action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=self.sigma * np.ones(n_actions))
-        self.model = TD3("MlpPolicy", self.env, learning_rate=self.lr, action_noise=action_noise)
+        action_noise = NormalActionNoise(
+            mean=np.zeros(n_actions), sigma=self.sigma * np.ones(n_actions)
+        )
+        self.model = TD3(
+            "MlpPolicy", self.env, learning_rate=self.lr, action_noise=action_noise
+        )
 
     def train(self):
         self.model.learn(total_timesteps=self.timesteps)

@@ -19,6 +19,4 @@ class MinEnergy(Criterion):
         energy = sum(response**2)  # Example: energy as sum of squares
         # TODO: probably have to change this because it will produce flat waveforms for min energy
         # and it will reward hack. What matters is the magnitude of the energy
-        return (
-            has_spikes - energy
-        )  # Negative energy for minimization        return -energy  # Negative energy for minimization
+        return has_spikes - energy  # Negative energy for minimization

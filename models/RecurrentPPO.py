@@ -1,11 +1,14 @@
-from sb3_contrib import RecurrentPPO
-from stable_baselines3.common.noise import NormalActionNoise
-from stable_baselines3.common.evaluation import evaluate_policy
-import numpy as np
 import gymnasium
-from criterions import MinEnergy, SelectivityCriterion
-from environment import NeuronEnv
+import numpy as np
+from sb3_contrib import RecurrentPPO
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.noise import NormalActionNoise
 
+from criterions import MinEnergy, SelectivityCriterion
+from environment import NEURONEnv
+
+
+# TODO: we should consider refactoring this into an abstract base class for all models
 class RecurrentPPOClass:
     def __init__(self, env, waveform, criterion, lr, timesteps):
         self.env = env

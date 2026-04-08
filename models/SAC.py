@@ -1,10 +1,12 @@
-from stable_baselines3 import SAC
-from stable_baselines3.common.noise import NormalActionNoise
-from stable_baselines3.common.evaluation import evaluate_policy
-import numpy as np
 import gymnasium
+import numpy as np
+from stable_baselines3 import SAC
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.noise import NormalActionNoise
+
 from criterions import MinEnergy, SelectivityCriterion
-from environment import NeuronEnv
+from environment import NEURONEnv
+
 
 class SACClass:
     def __init__(self, env, waveform, criterion, lr, timesteps):

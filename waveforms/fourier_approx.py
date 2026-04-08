@@ -51,18 +51,29 @@ class FourierWaveform(Waveform):
         }
 
     def _resolve_params(self, params):
-        return {
-            "c0": params.get("c0", self.c0),
-            "c1": params.get("c1", self.c1),
-            "c2": params.get("c2", self.c2),
-            "f1": params.get("f1", self.f1),
-            "f2": params.get("f2", self.f2),
-            "duty_cycle": params.get("duty_cycle", self.duty_cycle),
-            "period": params.get("period", self.period),
-            "phase_1": params.get("phase_1", self.phase_1),
-            "phase_2": params.get("phase_2", self.phase_2),
-            "delay": params.get("delay", self.delay),
+        params = {
+            "c0": params.get("c0", self.normalize_param(self.c0, "c0")),
+            "c1": params.get("c1", self.normalize_param(self.c1, "c1")),
+            "c2": params.get("c2", self.normalize_param(self.c2, "c2")),
+            "f1": params.get("f1", self.normalize_param(self.f1, "f1")),
+            "f2": params.get("f2", self.normalize_param(self.f2, "f2")),
+            "duty_cycle": params.get(
+                "duty_cycle", self.normalize_param(self.duty_cycle, "duty_cycle")
+            ),
+            "period": params.get("period", self.normalize_param(self.period, "period")),
+            "phase_1": params.get(
+                "phase_1", self.normalize_param(self.phase_1, "phase_1")
+            ),
+            "phase_2": params.get(
+                "phase_2", self.normalize_param(self.phase_2, "phase_2")
+            ),
+            "delay": params.get("delay", self.normalize_param(self.delay, "delay")),
         }
+
+        unnormalized_params = {
+            key: self.unnormalize_model_param(params[key], key) for key in params
+        }
+        return unnormalized_params
 
     def _is_active(self, t, params):
         period = params["period"]
@@ -79,10 +90,8 @@ class FourierWaveform(Waveform):
         phase_1 = params["phase_1"]
         phase_2 = params["phase_2"]
 
-        return np.clip(
+        return (
             c0
             + c1 * np.sin(2 * np.pi * f1 * t + phase_1)
-            + c2 * np.sin(2 * np.pi * f2 * t + phase_2),
-            -self.max_amplitude,
-            self.max_amplitude,
+            + c2 * np.sin(2 * np.pi * f2 * t + phase_2)
         )

@@ -18,31 +18,43 @@ class Waveform(ABC):
         t_points = self.get_t_points(duration, sampling_rate)
         waveform = np.zeros_like(t_points)
 
-        intervals = []
         active_interval = []
+        active_t_points = []
         # Extract active interval indexes
-        for t in t_points:
+        for i, t in enumerate(t_points):
             pulse_t = t - p["delay"] / 1000.0
             if self._is_active(pulse_t, p):
-                active_interval.append(t)
-            else:
-                intervals.append(np.array(active_interval))
+                active_interval.append(i)
+                active_t_points.append(pulse_t)
+            elif active_interval:
+                t_interval = np.array(active_t_points)
+                i_interval = np.array(active_interval)
+                waveform[i_interval] = np.clip(
+                    self._compute_value(t_interval, p),
+                    -self.max_amplitude,
+                    self.max_amplitude,
+                )
                 active_interval = []
         if active_interval:
-            intervals.append(np.array(active_interval))
-
-        for t_interval in enumerate(intervals):
-            waveform[t_interval] = np.clip(
+            t_interval = np.array(active_t_points)
+            i_interval = np.array(active_interval)
+            waveform[i_interval] = np.clip(
                 self._compute_value(t_interval, p),
                 -self.max_amplitude,
                 self.max_amplitude,
             )
 
-        return waveform, p
+        return waveform, self._return_params(p)
 
     @abstractmethod
     def _resolve_params(self, params):
         pass
+
+    def _return_params(self, unnormalized_params):
+        return {
+            key: self.normalize_param(unnormalized_params[key], key)
+            for key in unnormalized_params
+        }
 
     @abstractmethod
     def _is_active(self, pulse_t, params):
@@ -74,5 +86,16 @@ class Waveform(ABC):
             ]
         else:
             min_val, max_val = bounds
-            # Right now assumimg model output is in [0, 1], but this can be changed
-            return model_param * (max_val - min_val) + min_val
+            # Right now assumimg model output is in [-1, 1], but this can be changed
+            return (model_param + 1) * (max_val - min_val) / 2 + min_val
+
+    def normalize_param(self, param_value, param_name):
+        bounds = self.param_bounds[param_name]
+        if isinstance(bounds, list):
+            return [
+                self.normalize_param(pv, f"{param_name}_{i}")
+                for i, pv in enumerate(param_value)
+            ]
+        else:
+            min_val, max_val = bounds
+            return (param_value - min_val) * 2 / (max_val - min_val) - 1
