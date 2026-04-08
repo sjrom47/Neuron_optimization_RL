@@ -19,7 +19,8 @@ class NEURONEnv(Env):
     ):
         super().__init__()
 
-        self.neuron_types = [6, 7, 35, 36]
+        # self.neuron_types = [6, 7, 35, 36]
+        self.neuron_types = [36]
 
         self.criterion = self.init_criterion(criterion_type)
         # TODO: we will have to actually see if we use the 4 neuron types or we decide to use more

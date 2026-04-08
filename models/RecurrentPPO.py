@@ -1,6 +1,7 @@
 import gymnasium
 import numpy as np
 from sb3_contrib import RecurrentPPO
+from stable_baselines3.common.callbacks import ProgressBarCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.noise import NormalActionNoise
 
@@ -16,11 +17,17 @@ class RecurrentPPOClass:
         self.criterion = criterion
         self.lr = lr
         self.timesteps = timesteps
-        self.model = RecurrentPPO("MlpLstmPolicy", self.env, learning_rate=self.lr)
+        self.model = RecurrentPPO(
+            "MlpLstmPolicy", self.env, learning_rate=self.lr, verbose=1
+        )
 
     def train(self):
-        self.model.learn(total_timesteps=self.timesteps)
-        self.model.save("recurrentppo_opt")
+        self.model.learn(
+            total_timesteps=self.timesteps,
+            log_interval=1,
+            callback=ProgressBarCallback(),
+        )
+        self.model.save("weights/recurrentppo_opt")
 
     def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)

@@ -27,7 +27,7 @@ def parse_args():
         "--lr", type=float, default=1e-4, help="Learning rate for training"
     )
     parser.add_argument(
-        "--timesteps", type=int, default=10000, help="Number of training timesteps"
+        "--timesteps", type=int, default=100, help="Number of training timesteps"
     )
     return parser.parse_args()
 

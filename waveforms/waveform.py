@@ -35,6 +35,7 @@ class Waveform(ABC):
                     self.max_amplitude,
                 )
                 active_interval = []
+                active_t_points = []
         if active_interval:
             t_interval = np.array(active_t_points)
             i_interval = np.array(active_interval)
