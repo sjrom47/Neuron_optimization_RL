@@ -18,7 +18,7 @@ class RecurrentPPOClass:
         self.lr = lr
         self.timesteps = timesteps
         self.model = RecurrentPPO(
-            "MlpLstmPolicy", self.env, learning_rate=self.lr, verbose=1
+            "MlpLstmPolicy", self.env, learning_rate=self.lr, verbose=1, n_steps=64
         )
 
     def train(self):
@@ -29,7 +29,7 @@ class RecurrentPPOClass:
         )
         self.model.save("weights/recurrentppo_opt")
 
-    def eval(self, eps=10):
+    def eval(self, eps=1):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)
         print("Average Reward:", avg_reward)
         return avg_reward

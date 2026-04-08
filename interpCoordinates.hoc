@@ -106,7 +106,7 @@ proc getSecRefs(){ local secnum
 			numComp += nseg // keep track of number of compartments of model
 		}
 	}
-	printf("Created List of SectionRefs for %g sections\n",secnum)
+	// printf("Created List of SectionRefs for %g sections\n",secnum)
 	assign_section_types() // now that secrefs has been created, assign type_xtra field in each section
     assign_order2() // use depth-first tree traversal, works for any tree, but requires NSTACK > 1000 for most cells
 }
@@ -182,7 +182,7 @@ proc assign_section_types(){ localobj parent_sec// assign morphological type to 
 			} 
 		}		
 	 }
-	 print "Assigned section types to each section in type_xtra"
+	 // print "Assigned section types to each section in type_xtra"
 }
 
 proc assign_order(){ local i localobj oseci, oseci_c, oseci_secref
@@ -205,7 +205,7 @@ proc assign_order(){ local i localobj oseci, oseci_c, oseci_secref
 		i = i+1 // increment order i
 		if (nchildren ==0) end_loop = 1 // exit loop				
 	}
-	print "Assigned branch orders using depth first algorithm (assign_order) in order_xtra"
+	// print "Assigned branch orders using depth first algorithm (assign_order) in order_xtra"
 }
 
 proc assign_order2() { local i,n localobj oseci_secref
@@ -218,7 +218,7 @@ proc assign_order2() { local i,n localobj oseci_secref
 			//print "n = ", n, "in section", secname()
 		}		
 	}	
-	print "Assigned branch orders using traverse_tree (assign_order2) in order_xtra"
+	// print "Assigned branch orders using traverse_tree (assign_order2) in order_xtra"
 }
 proc traverse_tree() { local j, order localobj current_secref, child_secref,parent_secref
 	order = $1

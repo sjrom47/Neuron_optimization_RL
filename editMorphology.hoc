@@ -56,7 +56,7 @@ proc scale_diam3() { local f, i, ii, nn, p1,p2,p3,p4 localobj diams, diams2, dia
 			i += 1
 		}
 	}
-	printf("Scaled diameter of myelin sections using variable g-ratio\n")	
+	// printf("Scaled diameter of myelin sections using variable g-ratio\n")	
 }
 // Skip axon[0] convert every section to myelin + node
 INL_ratio = 100
@@ -164,7 +164,7 @@ proc add_myelin() { local cnt, myelinL, nn, include_PMAS_myelin, myelinL_sec, ma
 		Unmyelin_secList.append()	
 		axonal.append()	
 	}
-	printf("Myelinating axon: Replacing %g Axonal sections w/ %g Myelin, %g Node, %g Unmyelin sections\n",numAxonal,numMyelin,numNode,numUnmyelin)
+	// printf("Myelinating axon: Replacing %g Axonal sections w/ %g Myelin, %g Node, %g Unmyelin sections\n",numAxonal,numMyelin,numNode,numUnmyelin)
 	// connect Myelin[0] to iseg if exists before 1st bifurcation
 	if (include_PMAS_myelin==1) { 
 		print "Adding myelin before the 1st bifurcation"		

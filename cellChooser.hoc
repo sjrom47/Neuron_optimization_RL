@@ -66,7 +66,7 @@ proc cell_chooser() { local start_ind, synapses_enabled localobj terminal_sec_st
 	chdir(cell_dir) 				
         {load_file("createsimulation.hoc")}	// load cell-specific createsimulation.hoc file	
         create_cell(synapses_enabled)	
-        printf("*---------*\nLoaded Blue Brain cell: %s\n",cell_names.o(cell_id-1).s)		        
+        // printf("*---------*\nLoaded Blue Brain cell: %s\n",cell_names.o(cell_id-1).s)		        
         // insert xtra/extracellular and run setpointers/get secrefs()
         forall { // call setpointers() on original cell to get type_xtra of each original axon section
             insert xtra
@@ -90,10 +90,10 @@ proc cell_chooser() { local start_ind, synapses_enabled localobj terminal_sec_st
         // defines main_ax_list and min_sec_ind (public variable)    
         if (!meth1cells.contains(cell_id)) { // use descending approach for most axons				
             main_ax_list = get_main_ax2()
-            print "Got main axon (method 2)"
+            //print "Got main axon (method 2)"
         } else { // for cell meth1cells use ascending approach				
             main_ax_list = get_main_ax()					
-            print "Got main axon (method 1)"	
+            //print "Got main axon (method 1)"	
         }	          
         // Myelinate axon after getting main axon, pruning, and scaling diameter					
         if (myelinate_ax) {
@@ -107,16 +107,16 @@ proc cell_chooser() { local start_ind, synapses_enabled localobj terminal_sec_st
                 numComp+= nseg		 // save number of compartments	
             }	
             setpointers()	
-            printf("Inserted xtra and extracellular in all %g compartments\n",numComp)														                     				        
+            // printf("Inserted xtra and extracellular in all %g compartments\n",numComp)														                     				        
             //setpointers()
             // get new main axon
             if (!meth1cells.contains(cell_id)) { // use descending approach for most axons				
                 main_ax_list = get_main_ax2()
-                print "Got main axon (method 2)"
+                //print "Got main axon (method 2)"
             } else { // for meth1cells use ascending approach				
                 setpointers()	
                 main_ax_list = get_main_ax()		                		
-                print "Got main axon (method 1)"	
+                //print "Got main axon (method 1)"	
             }	
         } else {
             // get numComp

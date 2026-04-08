@@ -1,9 +1,12 @@
+import argparse
+
+from stable_baselines3.common.vec_env import SubprocVecEnv
+
 from environment import NEURONEnv
 from models import RecurrentPPOClass, SACClass, TD3Class, TQCClass
 
 
 def parse_args():
-    import argparse
 
     parser = argparse.ArgumentParser(
         description="Train RL model for neuron stimulation"
@@ -27,16 +30,25 @@ def parse_args():
         "--lr", type=float, default=1e-4, help="Learning rate for training"
     )
     parser.add_argument(
-        "--timesteps", type=int, default=100, help="Number of training timesteps"
+        "--timesteps", type=int, default=1000, help="Number of training timesteps"
     )
     return parser.parse_args()
+
+
+def make_env(waveform_type, criterion_type):
+    def _init():
+        return NEURONEnv(
+            waveform_type=waveform_type, criterion_type=criterion_type, max_actions=10
+        )
+
+    return _init
 
 
 if __name__ == "__main__":
     # Example usage
     args = parse_args()
-    env = NEURONEnv(
-        waveform_type=args.waveform_type, criterion_type=args.criterion_type
+    env = SubprocVecEnv(
+        [make_env(args.waveform_type, args.criterion_type) for _ in range(4)]
     )
     # TODO: maybe refactor into a factory at some point
     if args.model_type == "recurrentppo":
@@ -51,7 +63,11 @@ if __name__ == "__main__":
         raise ValueError(f"Unsupported model type: {args.model_type}")
 
     model = model_class(
-        env, env.waveform, env.criterion, lr=args.lr, timesteps=args.timesteps
+        env,
+        args.waveform_type,
+        args.criterion_type,
+        lr=args.lr,
+        timesteps=args.timesteps,
     )
     model.train()
     model.eval()

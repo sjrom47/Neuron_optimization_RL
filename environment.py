@@ -135,43 +135,8 @@ class NEURONEnv(Env):
     def simulate_neuron_response(self, waveform, neuron_type):
         time_array = np.arange(len(waveform)) / self.sampling_rate
         waveform2 = np.zeros_like(waveform)
-        # TODO: for future improvements, consider creating the neurons in reset and
-        # just using them here instead of creating a new one every time
-        # Also figure out exactly how to make it different for the transfer learning part
-        self.neuron = NeuronSim(
-            human_or_mice=0,
-            cell_id=neuron_type,
-            temp=37,
-            dt=0.025,
-            elec_field=self.elec_field,
-            elec_field2=None,
-        )
-        self.neuron._set_xtra_param(
-            angle=np.array([0, 0]), pos_neuron=np.array([0, 0, 0])
-        )
 
-        delay_init, delay_final = 2000, 5
-        save_state = os.path.join(
-            os.getcwd(),
-            "cells/SaveState/human_or_mice0cell-"
-            + str(neuron_type)
-            + "_Temp-37C_dt-25.0us_delay-2000ms.bin",
-        )
-        if not os.path.exists(save_state):
-            n_samples = int(delay_init / (0.025 * 1e-3 * self.sampling_rate)) + 1
-            time_array = np.arange(n_samples) / self.sampling_rate
-            amp_array = np.zeros(n_samples)
-            self.neuron.stimulate(
-                time_array=time_array,
-                amp_array=amp_array,
-                amp_array2=amp_array.copy(),
-                sampling_rate=self.sampling_rate,
-                delay_init=delay_init,
-                delay_final=delay_final,
-                save_state_show=False,
-            )
-
-        self.neuron.stimulate(
+        self.neurons[neuron_type].stimulate(
             time_array=time_array,
             amp_array=waveform,
             amp_array2=waveform2,
@@ -180,7 +145,9 @@ class NEURONEnv(Env):
             delay_init=2000,
             delay_final=5,
         )
-        soma_recording, _ = self.neuron.save_soma_recording(delay_init=2000)
+        soma_recording, _ = self.neurons[neuron_type].save_soma_recording(
+            delay_init=2000
+        )
         return soma_recording
 
     def get_stimulation_params(self, response):
@@ -195,6 +162,42 @@ class NEURONEnv(Env):
             duration=1.0, sampling_rate=self.sampling_rate, params=default_params
         )
         return default_waveform
+
+    def init_neuron(self, neuron_type, elec_field):
+        default_waveform = self.default_stimulation()
+
+        time_array = np.arange(len(default_waveform)) / self.sampling_rate
+        neuron = NeuronSim(
+            human_or_mice=0,
+            cell_id=neuron_type,
+            temp=37,
+            dt=0.025,
+            elec_field=elec_field,
+            elec_field2=None,
+        )
+        neuron._set_xtra_param(angle=np.array([0, 0]), pos_neuron=np.array([0, 0, 0]))
+
+        delay_init, delay_final = 2000, 5
+        save_state = os.path.join(
+            os.getcwd(),
+            "cells/SaveState/human_or_mice0cell-"
+            + str(neuron_type)
+            + "_Temp-37C_dt-25.0us_delay-2000ms.bin",
+        )
+        if not os.path.exists(save_state):
+            n_samples = int(delay_init / (0.025 * 1e-3 * self.sampling_rate)) + 1
+            time_array = np.arange(n_samples) / self.sampling_rate
+            amp_array = np.zeros(n_samples)
+            neuron.stimulate(
+                time_array=time_array,
+                amp_array=amp_array,
+                amp_array2=amp_array.copy(),
+                sampling_rate=self.sampling_rate,
+                delay_init=delay_init,
+                delay_final=delay_final,
+                save_state_show=False,
+            )
+        return neuron
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
@@ -213,9 +216,20 @@ class NEURONEnv(Env):
         y = r * np.sin(phi) * np.sin(theta)
         z = r * np.cos(phi)
 
-        self.elec_field = ICMS(x=x, y=y, z=z, conductivity=0.33)
-
         default_waveform = self.default_stimulation()
+
+        self.elec_field = ICMS(x=x, y=y, z=z, conductivity=0.33)
+        self.neurons = {}
+        self.neurons[self.state["neuron_type"]] = self.init_neuron(
+            self.state["neuron_type"], self.elec_field
+        )
+        if self.criterion.requires_multiple_responses:
+            for neuron_type in self.neuron_types:
+                if neuron_type == self.state["neuron_type"]:
+                    continue  # Skip the already initialized neuron for the selected neuron type
+                neuron = self.init_neuron(neuron_type, self.elec_field)
+                self.neurons[neuron_type] = neuron
+
         response = self.simulate_neuron_response(
             default_waveform, self.state["neuron_type"]
         )
