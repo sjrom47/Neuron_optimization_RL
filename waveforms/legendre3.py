@@ -34,7 +34,7 @@ class Legendre3Waveform(Waveform):
             "c0": (-self.max_amplitude, self.max_amplitude),
             "c1": (-self.max_amplitude, self.max_amplitude),
             "c2": (-self.max_amplitude, self.max_amplitude),
-            "period": (0.001, 100.0),  # seconds
+            "period": (0.1, 100.0),  # milliseconds
             "duty_cycle": (0.0, 1.0),  # fraction of period
             "delay": (0.0, 100.0),  # milliseconds
         }

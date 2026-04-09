@@ -34,7 +34,7 @@ class RecurrentPPOClass:
         )
         self.model.save("weights/recurrentppo_opt")
 
-    def eval(self, eps=1):
+    def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)
         print("Average Reward:", avg_reward)
         return avg_reward

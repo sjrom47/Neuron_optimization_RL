@@ -9,13 +9,13 @@ class Waveform(ABC):
         self.max_amplitude = max_amplitude
 
     def generate_waveform(self, duration, sampling_rate, params=None):
-        duration = duration / 1000.0  # convert ms to seconds
+        duration_s = duration / 1000.0  # convert ms to seconds
+        t_points = self.get_t_points(duration_s, sampling_rate) * 1000.0  # convert to ms
         if params is None:
             params = {"delay": 0.0}
 
         p = self._resolve_params(params)
 
-        t_points = self.get_t_points(duration, sampling_rate)
         pulse_t = t_points - p["delay"]
 
         # Vectorized active mask

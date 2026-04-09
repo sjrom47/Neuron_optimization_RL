@@ -3,7 +3,7 @@ from criterions.criterion import Criterion
 
 class MinEnergy(Criterion):
     def __init__(self):
-        self._lambda = 1e-5
+        self._lambda = 3e-5
 
     @property
     def requires_multiple_responses(self):

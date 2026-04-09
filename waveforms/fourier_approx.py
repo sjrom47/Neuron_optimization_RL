@@ -90,8 +90,9 @@ class FourierWaveform(Waveform):
         phase_1 = params["phase_1"]
         phase_2 = params["phase_2"]
 
+        t_s = t / 1000.0  # convert ms to seconds for Hz-based frequencies
         return (
             c0
-            + c1 * np.sin(2 * np.pi * f1 * t + phase_1)
-            + c2 * np.sin(2 * np.pi * f2 * t + phase_2)
+            + c1 * np.sin(2 * np.pi * f1 * t_s + phase_1)
+            + c2 * np.sin(2 * np.pi * f2 * t_s + phase_2)
         )

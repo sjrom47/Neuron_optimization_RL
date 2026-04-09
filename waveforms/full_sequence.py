@@ -1,3 +1,5 @@
+import numpy as np
+
 from waveforms.waveform import Waveform
 
 
@@ -20,7 +22,7 @@ class FullSequenceWaveform(Waveform):
         }
 
     def _is_active(self, t, params):
-        return True
+        return np.ones(len(t), dtype=bool)
 
     def _compute_value(self, pulse_t, params):
         return params["full_sequence"]

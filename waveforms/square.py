@@ -28,7 +28,7 @@ class SquareWaveform(Waveform):
     def param_bounds(self):
         # TODO: change to actual bounds for these parameters
         return {
-            "period": (0.0, 100.0),  # milliseconds
+            "period": (0.1, 30.0),  # milliseconds
             "amplitude": (0.0, self.max_amplitude),  # mA
             "duty_cycle": (0.0, 1.0),  # fraction of period
             "delay": (0.0, 30.0),  # milliseconds
@@ -49,7 +49,6 @@ class SquareWaveform(Waveform):
         unnormalized_params = {
             key: self.unnormalize_model_param(params[key], key) for key in params
         }
-        print(f"Unnormalized params: {unnormalized_params}")
         return unnormalized_params
 
     def _is_active(self, t, params):

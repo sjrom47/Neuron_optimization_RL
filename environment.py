@@ -150,26 +150,41 @@ class NEURONEnv(Env):
         terminated = self.actions_taken >= self.max_actions
         truncated = False  # You can implement truncation logic if needed
         t1 = time.time()
+        unnormalized_params = {
+            key: self.waveform.unnormalize_model_param(action[i], key)
+            for i, key in enumerate(self.waveform.param_bounds.keys())
+        }
         print(f"Step time: {t1 - t0}, Reward: {reward}")
         if reward > self.best_reward:
             self.best_reward = reward
-            self.plot_waveform_and_response(waveform, responses[0], times[0])
-
-        print(f"Action: {action}")
-
+            self.plot_waveform_and_response(
+                waveform, responses[0], times[0], unnormalized_params
+            )
+        if terminated:
+            self.plot_waveform_and_response(
+                waveform,
+                responses[0],
+                times[0],
+                unnormalized_params,
+                plot_name="terminated",
+            )
         return self.get_obs(), reward, terminated, truncated, {}
 
-    def plot_waveform_and_response(self, waveform, response, time_response):
+    def plot_waveform_and_response(
+        self, waveform, response, time_response, params, plot_name="best_response"
+    ):
         os.makedirs("plots", exist_ok=True)
         t_waveform = np.arange(len(waveform)) / self.sampling_rate * 1000  # ms
 
         fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-        fig.suptitle("Stimulation Waveform and Neuron Response")
+        fig.suptitle(f"Params: {params}")
         axs[0].plot(t_waveform, waveform)
         axs[0].set_title("Stimulation Waveform")
         axs[0].set_xlabel("Time (ms)")
         axs[0].set_ylabel("Amplitude")
-        axs[0].set_ylim(-self.waveform.max_amplitude, self.waveform.max_amplitude)
+        axs[0].set_ylim(
+            -1.1 * self.waveform.max_amplitude, 1.1 * self.waveform.max_amplitude
+        )
 
         axs[1].plot(time_response, response)
         axs[1].set_title("Neuron Response")
@@ -178,7 +193,7 @@ class NEURONEnv(Env):
         axs[1].set_ylim(-100, 40)
 
         plt.tight_layout()
-        plt.savefig("plots/best_response.png")
+        plt.savefig(f"plots/{plot_name}.png")
         plt.close()
 
     def simulate_neuron_response(self, waveform, neuron_type):
