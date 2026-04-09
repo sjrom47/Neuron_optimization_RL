@@ -5,6 +5,7 @@ os.environ["NEURON_MODULE_OPTIONS"] = "-nogui -NSTACK 100000 -NFRAME 20000"
 
 import time
 
+import matplotlib.pyplot as plt
 import numpy as np
 from gymnasium import Env, spaces
 
@@ -17,7 +18,7 @@ from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 class NEURONEnv(Env):
     def __init__(
-        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e5
+        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e6
     ):
         super().__init__()
 
@@ -31,6 +32,7 @@ class NEURONEnv(Env):
             if self.criterion.requires_multiple_responses
             else 3
         )
+        self.best_reward = -np.inf
 
         self.waveform = self.init_waveform(waveform_type)
         total_dim = (
@@ -65,7 +67,7 @@ class NEURONEnv(Env):
         self.actions_taken = 0
         self.max_actions = max_actions
         self.sampling_rate = sampling_rate
-        self.stimulation_duration = 100  # ms
+        self.stimulation_duration = 30  # ms
         self.delay_init = 2000  # ms
         self.delay_final = 5  # ms
 
@@ -101,35 +103,35 @@ class NEURONEnv(Env):
 
     def get_neuron_responses(self, waveform):
         responses = []
+        times = []
         if self.criterion.requires_multiple_responses:
             for neuron_type in self.neuron_types:
-                response = self.simulate_neuron_response(waveform, neuron_type)
+                response, t = self.simulate_neuron_response(waveform, neuron_type)
                 responses.append(response)
+                times.append(t)
         else:
-            response = self.simulate_neuron_response(
+            response, t = self.simulate_neuron_response(
                 waveform, self.state["neuron_type"]
             )
             responses.append(response)
-        return responses
+            times.append(t)
+        return responses, times
 
     def step(self, action):
         t0 = time.time()
         action_dict = {
             key: action[i] for i, key in enumerate(self.waveform.param_bounds.keys())
         }
-        t = time.time()
+
         waveform, params = self.waveform.generate_waveform(
             duration=self.stimulation_duration,
             sampling_rate=self.sampling_rate,
             params=action_dict,
         )
-        print(f"Waveform generation time: {time.time() - t}")
-        t = time.time()
-        responses = self.get_neuron_responses(waveform)
-        print(f"Neuron response simulation time: {time.time() - t}")
-        t = time.time()
-        reward = self.criterion.evaluate(responses)
-        print(f"Reward computation time: {time.time() - t}")
+
+        responses, times = self.get_neuron_responses(waveform)
+
+        reward = self.criterion.evaluate(waveform, responses)
 
         self.state["last_waveform_params"] = np.array(
             [params[key] for key in self.waveform.param_bounds.keys()]
@@ -145,10 +147,36 @@ class NEURONEnv(Env):
         truncated = False  # You can implement truncation logic if needed
         t1 = time.time()
         print(f"Step time: {t1 - t0}, Reward: {reward}")
+        if reward > self.best_reward:
+            self.best_reward = reward
+            self.plot_waveform_and_response(waveform, responses[0], times[0])
+
         return self.get_obs(), reward, terminated, truncated, {}
 
+    def plot_waveform_and_response(self, waveform, response, time_response):
+        os.makedirs("plots", exist_ok=True)
+        t_waveform = np.arange(len(waveform)) / self.sampling_rate * 1000  # ms
+
+        fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+        fig.suptitle("Stimulation Waveform and Neuron Response")
+        axs[0].plot(t_waveform, waveform)
+        axs[0].set_title("Stimulation Waveform")
+        axs[0].set_xlabel("Time (ms)")
+        axs[0].set_ylabel("Amplitude")
+
+        axs[1].plot(time_response, response)
+        axs[1].set_title("Neuron Response")
+        axs[1].set_xlabel("Time (ms)")
+        axs[1].set_ylabel("Voltage (mV)")
+
+        plt.tight_layout()
+        plt.savefig("plots/best_response.png")
+        plt.close()
+
     def simulate_neuron_response(self, waveform, neuron_type):
-        time_array = np.arange(len(waveform)) / self.sampling_rate
+        time_array = (
+            np.arange(len(waveform)) / self.sampling_rate * 1000
+        )  # convert to ms
         waveform2 = np.zeros_like(waveform)
 
         start_time = time.time()
@@ -162,7 +190,7 @@ class NEURONEnv(Env):
             delay_final=self.delay_final,
         )
         mid_time = time.time()
-        soma_recording, _ = self.neurons[neuron_type].save_soma_recording(
+        soma_recording, t_neuron = self.neurons[neuron_type].save_soma_recording(
             delay_init=self.delay_init
         )
         end_time = time.time()
@@ -170,7 +198,7 @@ class NEURONEnv(Env):
             f"Neuron simulation time: {end_time - start_time}, recording time: {end_time - mid_time}"
         )
 
-        return soma_recording
+        return soma_recording, t_neuron
 
     def get_stimulation_params(self, response):
         fr = firing_rate(response, np.arange(len(response)) / self.sampling_rate)
@@ -232,9 +260,12 @@ class NEURONEnv(Env):
 
         self.actions_taken = 0
 
-        self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
-        self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
-        self.state["phi"] = np.float64(random.uniform(0.0, np.pi))
+        self.state["electrode_radius"] = np.float64(1)
+        self.state["theta"] = np.float64(0)
+        self.state["phi"] = np.float64(0)
+        # self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
+        # self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
+        # self.state["phi"] = np.float64(random.uniform(0.0, np.pi))
         self.state["neuron_type"] = int(random.choice(self.neuron_types))
 
         r = float(self.state["electrode_radius"])
@@ -258,7 +289,7 @@ class NEURONEnv(Env):
                 neuron = self.init_neuron(neuron_type, self.elec_field)
                 self.neurons[neuron_type] = neuron
 
-        response = self.simulate_neuron_response(
+        response, _ = self.simulate_neuron_response(
             default_waveform, self.state["neuron_type"]
         )
 
@@ -270,7 +301,9 @@ class NEURONEnv(Env):
             for neuron_type in self.neuron_types:
                 if neuron_type == self.state["neuron_type"]:
                     continue  # Skip the already computed response for the selected neuron type
-                response = self.simulate_neuron_response(default_waveform, neuron_type)
+                response, _ = self.simulate_neuron_response(
+                    default_waveform, neuron_type
+                )
                 params = self.get_stimulation_params(response)
                 neuron_stimulation_params.extend(params)
         self.state["last_stimulation_params"] = np.array(neuron_stimulation_params)

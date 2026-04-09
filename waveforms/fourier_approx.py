@@ -16,7 +16,7 @@ class FourierWaveform(Waveform):
         phase_1=0.0,
         phase_2=0.0,
         delay=0.0,
-        max_amplitude=2000.0,
+        max_amplitude=500.0,
     ):
         super().__init__(max_amplitude)
         self.c0 = c0
@@ -78,7 +78,7 @@ class FourierWaveform(Waveform):
     def _is_active(self, t, params):
         period = params["period"]
         duty_cycle = params["duty_cycle"]
-        return t >= 0 & ((t % period) < duty_cycle * period)
+        return (t >= 0) & ((t % period) < duty_cycle * period)
 
     def _compute_value(self, pulse_t, params):
         t = pulse_t

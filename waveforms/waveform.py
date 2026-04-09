@@ -5,22 +5,22 @@ import numpy as np
 
 
 class Waveform(ABC):
-    def __init__(self, max_amplitude=2000.0):
+    def __init__(self, max_amplitude=500.0):
         self.max_amplitude = max_amplitude
 
     def generate_waveform(self, duration, sampling_rate, params=None):
+        duration = duration / 1000.0  # convert ms to seconds
         if params is None:
             params = {"delay": 0.0}
-        t = time.time()
+
         p = self._resolve_params(params)
-        print(f"Parameter resolution time: {time.time() - t}")
+
         t_points = self.get_t_points(duration, sampling_rate)
         pulse_t = t_points - p["delay"] / 1000.0
 
         # Vectorized active mask
-        t = time.time()
+
         active_mask = self._is_active(pulse_t, p)  # returns boolean array
-        print(f"Active mask computation time: {time.time() - t}")
 
         waveform = np.zeros_like(t_points)
         if np.any(active_mask):
@@ -29,9 +29,9 @@ class Waveform(ABC):
                 -self.max_amplitude,
                 self.max_amplitude,
             )
-        t = time.time()
+
         returned_params = self._return_params(p)
-        print(f"Unnorm time: {time.time() - t}")
+
         return waveform, returned_params
 
     @abstractmethod

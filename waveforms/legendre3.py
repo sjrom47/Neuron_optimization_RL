@@ -59,7 +59,7 @@ class Legendre3Waveform(Waveform):
     def _is_active(self, t, params):
         period = params["period"]
         duty_cycle = params["duty_cycle"]
-        return t >= 0 & ((t % period) < duty_cycle * period)
+        return (t >= 0) & ((t % period) < duty_cycle * period)
 
     def _compute_value(self, pulse_t, params):
         phase = (pulse_t - min(pulse_t)) / (
