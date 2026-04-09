@@ -31,21 +31,26 @@ class SquareWaveform(Waveform):
             "period": (0.0, 100.0),  # milliseconds
             "amplitude": (0.0, self.max_amplitude),  # mA
             "duty_cycle": (0.0, 1.0),  # fraction of period
-            "delay": (0.0, 100.0),  # milliseconds
+            "delay": (0.0, 30.0),  # milliseconds
         }
 
     def _resolve_params(self, params):
-        amplitude = params.get("amplitude", self.amplitude)
-        duty_cycle = params.get("duty_cycle", self.duty_cycle)
-        delay = params.get("delay", self.delay)
-        period = params.get("period", self.period)
-
-        return {
-            "amplitude": amplitude,
-            "duty_cycle": duty_cycle,
-            "delay": delay,
-            "period": period,
+        #! Careful with the order in the dict
+        params = {
+            "period": params.get("period", self.normalize_param(self.period, "period")),
+            "amplitude": params.get(
+                "amplitude", self.normalize_param(self.amplitude, "amplitude")
+            ),
+            "duty_cycle": params.get(
+                "duty_cycle", self.normalize_param(self.duty_cycle, "duty_cycle")
+            ),
+            "delay": params.get("delay", self.normalize_param(self.delay, "delay")),
         }
+        unnormalized_params = {
+            key: self.unnormalize_model_param(params[key], key) for key in params
+        }
+        print(f"Unnormalized params: {unnormalized_params}")
+        return unnormalized_params
 
     def _is_active(self, t, params):
         period = params["period"]

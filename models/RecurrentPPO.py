@@ -18,7 +18,12 @@ class RecurrentPPOClass:
         self.lr = lr
         self.timesteps = timesteps
         self.model = RecurrentPPO(
-            "MlpLstmPolicy", self.env, learning_rate=self.lr, verbose=1, n_steps=64
+            "MlpLstmPolicy",
+            self.env,
+            learning_rate=self.lr,
+            verbose=1,
+            n_steps=200,
+            batch_size=50,
         )
 
     def train(self):

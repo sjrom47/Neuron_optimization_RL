@@ -16,7 +16,7 @@ class Waveform(ABC):
         p = self._resolve_params(params)
 
         t_points = self.get_t_points(duration, sampling_rate)
-        pulse_t = t_points - p["delay"] / 1000.0
+        pulse_t = t_points - p["delay"]
 
         # Vectorized active mask
 

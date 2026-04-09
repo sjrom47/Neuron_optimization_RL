@@ -8,6 +8,10 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from gymnasium import Env, spaces
+from neuron import coreneuron
+
+coreneuron.enable = True
+coreneuron.gpu = True
 
 from criterions import MinEnergy, SelectivityCriterion
 from elec_field import ICMS
@@ -18,7 +22,7 @@ from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 class NEURONEnv(Env):
     def __init__(
-        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e6
+        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e5
     ):
         super().__init__()
 
@@ -151,6 +155,8 @@ class NEURONEnv(Env):
             self.best_reward = reward
             self.plot_waveform_and_response(waveform, responses[0], times[0])
 
+        print(f"Action: {action}")
+
         return self.get_obs(), reward, terminated, truncated, {}
 
     def plot_waveform_and_response(self, waveform, response, time_response):
@@ -163,11 +169,13 @@ class NEURONEnv(Env):
         axs[0].set_title("Stimulation Waveform")
         axs[0].set_xlabel("Time (ms)")
         axs[0].set_ylabel("Amplitude")
+        axs[0].set_ylim(-self.waveform.max_amplitude, self.waveform.max_amplitude)
 
         axs[1].plot(time_response, response)
         axs[1].set_title("Neuron Response")
         axs[1].set_xlabel("Time (ms)")
         axs[1].set_ylabel("Voltage (mV)")
+        axs[1].set_ylim(-100, 40)
 
         plt.tight_layout()
         plt.savefig("plots/best_response.png")
@@ -223,7 +231,7 @@ class NEURONEnv(Env):
             human_or_mice=0,
             cell_id=neuron_type,
             temp=37.0,
-            dt=0.025,
+            dt=0.1,
             elec_field=elec_field,
             elec_field2=None,
         )
@@ -234,7 +242,7 @@ class NEURONEnv(Env):
             os.getcwd(),
             "cells/SaveState/human_or_mice0cell-"
             + str(neuron_type)
-            + "_Temp-37.0C_dt-25.0us_delay-"
+            + "_Temp-37.0C_dt-100.0us_delay-"
             + str(delay_init)
             + "ms.bin",
         )
@@ -271,9 +279,12 @@ class NEURONEnv(Env):
         r = float(self.state["electrode_radius"])
         theta = float(self.state["theta"])
         phi = float(self.state["phi"])
-        x = r * np.sin(phi) * np.cos(theta)
-        y = r * np.sin(phi) * np.sin(theta)
-        z = r * np.cos(phi)
+        x = 0
+        y = 1
+        z = 0
+        # x = r * np.sin(phi) * np.cos(theta)
+        # y = r * np.sin(phi) * np.sin(theta)
+        # z = r * np.cos(phi)
 
         default_waveform = self.default_stimulation()
 
