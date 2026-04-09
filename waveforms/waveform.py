@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -9,43 +10,29 @@ class Waveform(ABC):
 
     def generate_waveform(self, duration, sampling_rate, params=None):
         if params is None:
-            params = {"delay": 0.0}  # default delay of 0 ms if not provided
-
-        # Extract parameters and move to actual parameter bounds
+            params = {"delay": 0.0}
+        t = time.time()
         p = self._resolve_params(params)
-
-        # Time points
+        print(f"Parameter resolution time: {time.time() - t}")
         t_points = self.get_t_points(duration, sampling_rate)
-        waveform = np.zeros_like(t_points)
+        pulse_t = t_points - p["delay"] / 1000.0
 
-        active_interval = []
-        active_t_points = []
-        # Extract active interval indexes
-        for i, t in enumerate(t_points):
-            pulse_t = t - p["delay"] / 1000.0
-            if self._is_active(pulse_t, p):
-                active_interval.append(i)
-                active_t_points.append(pulse_t)
-            elif active_interval:
-                t_interval = np.array(active_t_points)
-                i_interval = np.array(active_interval)
-                waveform[i_interval] = np.clip(
-                    self._compute_value(t_interval, p),
-                    -self.max_amplitude,
-                    self.max_amplitude,
-                )
-                active_interval = []
-                active_t_points = []
-        if active_interval:
-            t_interval = np.array(active_t_points)
-            i_interval = np.array(active_interval)
-            waveform[i_interval] = np.clip(
-                self._compute_value(t_interval, p),
+        # Vectorized active mask
+        t = time.time()
+        active_mask = self._is_active(pulse_t, p)  # returns boolean array
+        print(f"Active mask computation time: {time.time() - t}")
+
+        waveform = np.zeros_like(t_points)
+        if np.any(active_mask):
+            waveform[active_mask] = np.clip(
+                self._compute_value(pulse_t[active_mask], p),
                 -self.max_amplitude,
                 self.max_amplitude,
             )
-
-        return waveform, self._return_params(p)
+        t = time.time()
+        returned_params = self._return_params(p)
+        print(f"Unnorm time: {time.time() - t}")
+        return waveform, returned_params
 
     @abstractmethod
     def _resolve_params(self, params):

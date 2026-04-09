@@ -1,6 +1,6 @@
 import argparse
 
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from environment import NEURONEnv
 from models import RecurrentPPOClass, SACClass, TD3Class, TQCClass
@@ -47,9 +47,7 @@ def make_env(waveform_type, criterion_type):
 if __name__ == "__main__":
     # Example usage
     args = parse_args()
-    env = SubprocVecEnv(
-        [make_env(args.waveform_type, args.criterion_type) for _ in range(4)]
-    )
+    env = DummyVecEnv([make_env(args.waveform_type, args.criterion_type)])
     # TODO: maybe refactor into a factory at some point
     if args.model_type == "recurrentppo":
         model_class = RecurrentPPOClass
