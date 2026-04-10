@@ -158,7 +158,7 @@ class NEURONEnv(Env):
         if reward > self.best_reward:
             self.best_reward = reward
             self.plot_waveform_and_response(
-                waveform, responses[0], times[0], unnormalized_params
+                waveform, responses[0], times[0], unnormalized_params, reward=reward
             )
         if terminated:
             self.plot_waveform_and_response(
@@ -167,17 +167,28 @@ class NEURONEnv(Env):
                 times[0],
                 unnormalized_params,
                 plot_name="terminated",
+                reward=reward,
             )
         return self.get_obs(), reward, terminated, truncated, {}
 
     def plot_waveform_and_response(
-        self, waveform, response, time_response, params, plot_name="best_response"
+        self,
+        waveform,
+        response,
+        time_response,
+        params,
+        plot_name="best_response",
+        reward=None,
     ):
+        if reward is None:
+            reward = self.best_reward
         os.makedirs("plots", exist_ok=True)
         t_waveform = np.arange(len(waveform)) / self.sampling_rate * 1000  # ms
 
         fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-        fig.suptitle(f"Params: {params}")
+        fig.suptitle(
+            f"Params: {' '.join([f'{key}={params[key]:.2f}' for key in params])}\n Reward: {reward:.3f}"
+        )
         axs[0].plot(t_waveform, waveform)
         axs[0].set_title("Stimulation Waveform")
         axs[0].set_xlabel("Time (ms)")
