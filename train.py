@@ -48,6 +48,14 @@ if __name__ == "__main__":
     # Example usage
     args = parse_args()
     env = DummyVecEnv([make_env(args.waveform_type, args.criterion_type)])
+    print('env created')
+    # Attempt #1 to increase speed: Parallelization of environments
+    # num_envs = 2
+    # envs = []
+    # for i in range (num_envs):
+    #     envs.append(make_env(args.waveform_type, args.criterion_type))
+    # env = SubprocVecEnv(envs, start_method='fork')
+        
     # TODO: maybe refactor into a factory at some point
     if args.model_type == "recurrentppo":
         model_class = RecurrentPPOClass
