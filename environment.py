@@ -22,7 +22,7 @@ from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 class NEURONEnv(Env):
     def __init__(
-        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e5
+        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e4
     ):
         super().__init__()
 
@@ -72,7 +72,8 @@ class NEURONEnv(Env):
         self.max_actions = max_actions
         self.sampling_rate = sampling_rate
         self.stimulation_duration = 30  # ms
-        self.delay_init = 2000  # ms
+        self.delay_init_savestate = 2000 # ms
+        self.delay_init = 5  # ms
         self.delay_final = 5  # ms
 
     def get_obs(self):
@@ -263,7 +264,7 @@ class NEURONEnv(Env):
         )
         neuron._set_xtra_param(angle=np.array([0, 0]), pos_neuron=np.array([0, 0, 0]))
 
-        delay_init, delay_final = self.delay_init, self.delay_final
+        delay_init, delay_final = self.delay_init_savestate, self.delay_final
         save_state = os.path.join(
             os.getcwd(),
             "cells/SaveState/human_or_mice0cell-"
