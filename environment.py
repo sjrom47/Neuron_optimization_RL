@@ -8,10 +8,6 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 from gymnasium import Env, spaces
-from neuron import coreneuron
-
-coreneuron.enable = True
-coreneuron.gpu = True
 
 from criterions import MinEnergy, SelectivityCriterion
 from elec_field import ICMS
