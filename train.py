@@ -30,7 +30,7 @@ def parse_args():
         "--lr", type=float, default=1e-4, help="Learning rate for training"
     )
     parser.add_argument(
-        "--timesteps", type=int, default=1000, help="Number of training timesteps"
+        "--timesteps", type=int, default=50000, help="Number of training timesteps"
     )
     return parser.parse_args()
 
@@ -47,15 +47,15 @@ def make_env(waveform_type, criterion_type):
 if __name__ == "__main__":
     # Example usage
     args = parse_args()
-    env = DummyVecEnv([make_env(args.waveform_type, args.criterion_type)])
-    print('env created')
+    # env = DummyVecEnv([make_env(args.waveform_type, args.criterion_type)])
+    # print('env created')
     # Attempt #1 to increase speed: Parallelization of environments
-    # num_envs = 2
-    # envs = []
-    # for i in range (num_envs):
-    #     envs.append(make_env(args.waveform_type, args.criterion_type))
-    # env = SubprocVecEnv(envs, start_method='fork')
-        
+    num_envs = 8
+    envs = []
+    for i in range(num_envs):
+        envs.append(make_env(args.waveform_type, args.criterion_type))
+    env = SubprocVecEnv(envs, start_method="spawn")
+
     # TODO: maybe refactor into a factory at some point
     if args.model_type == "recurrentppo":
         model_class = RecurrentPPOClass

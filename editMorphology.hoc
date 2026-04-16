@@ -79,7 +79,7 @@ proc myelinate_axon() { localobj axon_secList
 	//scale_diam2(1/g_ratio,Myelin_secList) // use constant g_ratio
 	scale_diam3(Myelin_secList) // use diam dependent g ratio using 3° polynomial fit to Micheva 2016 data
 	//scale_diam4(Node_secList) // use diam dependent g ratio to scale down node diameters
-	geom_nseg(40,axonal) // assign nseg to each section (2 per 40 um)	
+	geom_nseg(80,axonal) // assign nseg to each section (2 per 80 um)
 	myelin_biophys()
 	forsec axonal cell.all.append() // add to cell sectionlist
 	forsec iseg_secList cell.axonal.append() // add initial segment to cell.axonal()
@@ -167,7 +167,7 @@ proc add_myelin() { local cnt, myelinL, nn, include_PMAS_myelin, myelinL_sec, ma
 	// printf("Myelinating axon: Replacing %g Axonal sections w/ %g Myelin, %g Node, %g Unmyelin sections\n",numAxonal,numMyelin,numNode,numUnmyelin)
 	// connect Myelin[0] to iseg if exists before 1st bifurcation
 	if (include_PMAS_myelin==1) { 
-		print "Adding myelin before the 1st bifurcation"		
+		// print "Adding myelin before the 1st bifurcation"		
 		forsec iseg_secList {			
 			children_SecList = getchildren() // get existing children sections
 			forsec children_SecList	{disconnect()} // disconnect children from cell.axon[0]				

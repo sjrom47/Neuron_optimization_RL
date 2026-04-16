@@ -44,10 +44,10 @@ class FourierWaveform(Waveform):
             "f1": (0.001, 100.0),  # Hz
             "f2": (0.001, 100.0),  # Hz
             "duty_cycle": (0.0, 1.0),  # fraction of period
-            "period": (0.001, 100.0),  # milliseconds
+            "period": (0.001, 30.0),  # milliseconds
             "phase_1": (0.0, 2 * np.pi),  # radians
             "phase_2": (0.0, 2 * np.pi),  # radians
-            "delay": (0.0, 100.0),  # milliseconds
+            "delay": (0.0, 30.0),  # milliseconds
         }
 
     def _resolve_params(self, params):

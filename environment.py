@@ -3,8 +3,9 @@ import random
 
 os.environ["NEURON_MODULE_OPTIONS"] = "-nogui -NSTACK 100000 -NFRAME 20000"
 
-import time
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from gymnasium import Env, spaces
@@ -18,7 +19,7 @@ from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 class NEURONEnv(Env):
     def __init__(
-        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e4
+        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e5
     ):
         super().__init__()
 
@@ -32,8 +33,6 @@ class NEURONEnv(Env):
             if self.criterion.requires_multiple_responses
             else 3
         )
-        self.best_reward = -np.inf
-
         self.waveform = self.init_waveform(waveform_type)
         total_dim = (
             1  # electrode_radius
@@ -68,8 +67,7 @@ class NEURONEnv(Env):
         self.max_actions = max_actions
         self.sampling_rate = sampling_rate
         self.stimulation_duration = 30  # ms
-        self.delay_init_savestate = 2000 # ms
-        self.delay_init = 5  # ms
+        self.delay_init = 2000  # ms
         self.delay_final = 5  # ms
 
     def get_obs(self):
@@ -119,7 +117,6 @@ class NEURONEnv(Env):
         return responses, times
 
     def step(self, action):
-        t0 = time.time()
         action_dict = {
             key: action[i] for i, key in enumerate(self.waveform.param_bounds.keys())
         }
@@ -146,27 +143,21 @@ class NEURONEnv(Env):
         self.actions_taken += 1
         terminated = self.actions_taken >= self.max_actions
         truncated = False  # You can implement truncation logic if needed
-        t1 = time.time()
         unnormalized_params = {
             key: self.waveform.unnormalize_model_param(action[i], key)
             for i, key in enumerate(self.waveform.param_bounds.keys())
         }
-        print(f"Step time: {t1 - t0}, Reward: {reward}")
-        if reward > self.best_reward:
-            self.best_reward = reward
-            self.plot_waveform_and_response(
-                waveform, responses[0], times[0], unnormalized_params, reward=reward
-            )
-        if terminated:
-            self.plot_waveform_and_response(
-                waveform,
-                responses[0],
-                times[0],
-                unnormalized_params,
-                plot_name="terminated",
-                reward=reward,
-            )
-        return self.get_obs(), reward, terminated, truncated, {}
+        info = {
+            "waveform": waveform,
+            "response": responses[0],
+            "time_response": times[0],
+            "params": unnormalized_params,
+            "reward": reward,
+            "terminated": terminated,
+            "max_amplitude": self.waveform.max_amplitude,
+            "sampling_rate": self.sampling_rate,
+        }
+        return self.get_obs(), reward, terminated, truncated, info
 
     def plot_waveform_and_response(
         self,
@@ -210,7 +201,6 @@ class NEURONEnv(Env):
         )  # convert to ms
         waveform2 = np.zeros_like(waveform)
 
-        start_time = time.time()
         self.neurons[neuron_type].stimulate(
             time_array=time_array,
             amp_array=waveform,
@@ -220,13 +210,8 @@ class NEURONEnv(Env):
             delay_init=self.delay_init,
             delay_final=self.delay_final,
         )
-        mid_time = time.time()
         soma_recording, t_neuron = self.neurons[neuron_type].save_soma_recording(
             delay_init=self.delay_init
-        )
-        end_time = time.time()
-        print(
-            f"Neuron simulation time: {end_time - start_time}, recording time: {end_time - mid_time}"
         )
 
         return soma_recording, t_neuron
@@ -260,7 +245,7 @@ class NEURONEnv(Env):
         )
         neuron._set_xtra_param(angle=np.array([0, 0]), pos_neuron=np.array([0, 0, 0]))
 
-        delay_init, delay_final = self.delay_init_savestate, self.delay_final
+        delay_init, delay_final = self.delay_init, self.delay_final
         save_state = os.path.join(
             os.getcwd(),
             "cells/SaveState/human_or_mice0cell-"
@@ -269,9 +254,7 @@ class NEURONEnv(Env):
             + str(delay_init)
             + "ms.bin",
         )
-        print(f"Checking for saved state at: {save_state}")
         if not os.path.exists(save_state):
-            print("Saved state not found")
             n_samples = int(delay_init / (0.025 * 1e-3 * self.sampling_rate)) + 1
             time_array = np.arange(n_samples) / self.sampling_rate
             amp_array = np.zeros(n_samples)

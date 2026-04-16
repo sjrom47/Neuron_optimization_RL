@@ -19,7 +19,7 @@ class MinEnergy(Criterion):
         energy = sum(waveform**2) / len(waveform)  # Example: energy as sum of squares
         # TODO: probably have to change this because it will produce flat waveforms for min energy
         # and it will reward hack. What matters is the magnitude of the energy
-        print(
-            f"Spikes: {spikes}, Energy: {energy}, reward: {spikes - self._lambda * energy}"
-        )
+        # print(
+        #     f"Spikes: {spikes}, Energy: {energy}, reward: {spikes - self._lambda * energy}"
+        # )
         return spikes - self._lambda * energy  # Negative energy for minimization

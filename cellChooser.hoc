@@ -126,7 +126,7 @@ proc cell_chooser() { local start_ind, synapses_enabled localobj terminal_sec_st
             }            
         }            
         chdir(current_dir) // switch back to parallel_plate     
-        print "Cell Loaded"
+        // print "Cell Loaded"
         // Initilize potentials and waveform
         // getes() // set Ve(x,y,z)
         // setstim(DEL,DUR,AMP) // set waveform (current of E-field)  

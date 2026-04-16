@@ -67,8 +67,8 @@ proc init() { local synapses_enabled
     // Load the morphology
     load_morphology()
 
-    // Set the number of compartments per section (2 per 40 mum)
-    geom_nseg(40)
+    // Set the number of compartments per section (2 per 80 mum)
+    geom_nseg(80)
 
     // Initialise the biophysics 
     biophys()
@@ -180,14 +180,14 @@ proc replace_axon(){ local nSec, D1, D2, dist, count
     access axon[0] {                                                            
         L = 30                                                              
         diam = D1                                                           
-        nseg = 1 + 2*int(L/40)                                              
+        nseg = 1 + 2*int(L/80)                                              
         all.append()                                                            
         axonal.append()                                                         
     }                            
     access axon[1] {                                                            
         L = 30                                                                  
         diam = D2                                                           
-        nseg = 1 + 2*int(L/40)                                              
+        nseg = 1 + 2*int(L/80)                                              
         all.append()                                                            
         axonal.append()                                                         
     }                                                                           

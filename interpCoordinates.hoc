@@ -90,7 +90,7 @@ proc getcoords() { local ii, nn, kk, xr, xr1
 	  }	  
 	}
     numSect = xList.count()		
-    printf("numSect was %g\n",numSect)	
+    //printf("numSect was %g\n",numSect)	
 }
 
 objref secrefs

@@ -1,10 +1,14 @@
+import os
+from datetime import datetime
+
 import gymnasium
 import numpy as np
 from sb3_contrib import RecurrentPPO
-from stable_baselines3.common.callbacks import ProgressBarCallback
+from stable_baselines3.common.callbacks import CallbackList, ProgressBarCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.noise import NormalActionNoise
 
+from callbacks import BestResponseCallback
 from criterions import MinEnergy, SelectivityCriterion
 from environment import NEURONEnv
 
@@ -22,15 +26,17 @@ class RecurrentPPOClass:
             self.env,
             learning_rate=self.lr,
             verbose=1,
-            n_steps=200,
-            batch_size=50,
+            n_steps=50,
+            batch_size=32,
         )
 
     def train(self):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = os.path.join("plots", f"{timestamp}_recurrentppo")
         self.model.learn(
             total_timesteps=self.timesteps,
             log_interval=1,
-            callback=ProgressBarCallback(),
+            callback=CallbackList([ProgressBarCallback(), BestResponseCallback(run_dir=run_dir)]),
         )
         self.model.save("weights/recurrentppo_opt")
 

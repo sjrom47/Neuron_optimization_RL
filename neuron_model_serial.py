@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 from matplotlib import cm
 
 import os
-import time
 from scipy.signal import find_peaks
 from sklearn.linear_model import LinearRegression as lin_fit
 
@@ -68,12 +69,10 @@ class NeuronSim:
                 h('cell_chooser(%s)'%str(cell_id))
                 h.celsius = temp
                 h.dt = dt
-                print("Temparature chosen for simulation:", h.celsius)
-                print("Discretization Step for simulation: %s ms"%(str(h.dt)))
        
             def _set_extracellular_stim(self):
                 h.load_file(cwd+"/Backend_Code/fixnseg.hoc")
-                h('geom_nseg()')
+                h('geom_nseg(80)')
 
                 for sec in h.allsec():
                     if sec.nseg == 1:
@@ -150,8 +149,6 @@ class NeuronSim:
                 axon_dir_sph = self._cart_to_sph(axon_dir)
                 soma = list(h.allsec())[0]
                 soma_loc = np.array([soma(0.5).xtra.x,soma(0.5).xtra.y,soma(0.5).xtra.z])
-                print("The reference position being used to orient neuron is x: %s um, y: %s um, z %s um "%(str(round(soma_loc[0],3)),str(round(soma_loc[1],3)),str(round(soma_loc[2],3))))
-                print("The roughly linear direction of the main axon is the unit direction : [%s, %s, %s] "%(str(round(axon_dir[0],3)),str(round(axon_dir[1],3)),str(round(axon_dir[2],3))))
                 #self.plot_neuron_shape()
                 return axon_dir.flatten(), axon_dir_sph.flatten(), soma_loc.flatten(), coord_3d_main_axon
     
@@ -254,7 +251,6 @@ class NeuronSim:
                 delay_final, delay_init = int(delay_final), int(delay_init)
                 save_state = os.path.join(save_state,'human_or_mice'+str(self.human_or_mice)+'cell-'+str(self.cell_id)+'_Temp-'+str(h.celsius)+'C_dt-'+str(h.dt*10**3)+'us_delay-'+str(delay_init)+'ms.bin')
                 if not os.path.exists(save_state):
-                    print("Creating Save State for the neuron type ....")
                     burn_in = delay_init  # ms 
                     burn_in_sample = np.linspace(0, burn_in, int(sampling_rate * burn_in * 1e-3))
                     burn_in_amp = np.zeros(len(burn_in_sample))
@@ -297,19 +293,18 @@ class NeuronSim:
                         plt.show()
                     else:
                         plt.close()
-                    print("Finished Creating the Save State for the neuron type")
                     return True 
                 
                 ## burn_in_period
                 burn_in = delay_init+2  # ms
                 burn_out = delay_final  # ms
-                
+
                 burn_in_sample = np.linspace(0, burn_in, int(sampling_rate * burn_in * 1e-3))
                 burn_in_amp = np.zeros(len(burn_in_sample))
-                
+
                 burn_out_sample = np.linspace(0, burn_out, int(sampling_rate * burn_out * 1e-3))
                 burn_out_amp = np.zeros(len(burn_out_sample))
-                
+
                 amp_array = np.hstack((burn_in_amp, amp_array, burn_out_amp))
                 if amp_array2 is not None:
                     amp_array2 = np.hstack((burn_in_amp.copy(), amp_array2, burn_out_amp))
@@ -318,31 +313,36 @@ class NeuronSim:
 
                 time_array_tmp = np.hstack((burn_in_sample, time_array + burn_in, burn_out_sample + time_array[len(time_array) - 1] + burn_in))
                 time_array = time_array_tmp.copy()
-                time_array_2 = time_array_tmp.copy() 
-                t_vec = h.Vector(time_array)
-                stim_waveform = h.Vector(amp_array)
-                t_vec_2 = h.Vector(time_array_2)
-                stim_waveform_2 = h.Vector(amp_array2)
-                
-		## Extracellular 
-                stim_waveform.play(h._ref_stim_xtra, t_vec, 1)
-                stim_waveform_2.play(h._ref_stim2_xtra, t_vec_2, 1)
+                time_array_2 = time_array_tmp.copy()
+
+                if hasattr(self, '_stim_waveform'):
+                    self._stim_waveform.play_remove()
+                    self._stim_waveform_2.play_remove()
+                self._t_vec = h.Vector(time_array)
+                self._stim_waveform = h.Vector(amp_array)
+                self._t_vec_2 = h.Vector(time_array_2)
+                self._stim_waveform_2 = h.Vector(amp_array2)
+
+		## Extracellular
+                self._stim_waveform.play(h._ref_stim_xtra, self._t_vec, 1)
+                self._stim_waveform_2.play(h._ref_stim2_xtra, self._t_vec_2, 1)
 
                 ## Choose Recording Site
                 soma = list(h.allsec())[0]
                 soma_recording = h.Vector().record(soma(0.5)._ref_v) ## Spikes are recorded in the soma
-                           
+
                 ## Record Time
-                t = h.Vector().record(h._ref_t)                 
+                t = h.Vector().record(h._ref_t)
+
                 h.finitialize(Vinit * mV)
-                
+
                 ns = h.SaveState()
                 sf_new = h.File(save_state)
                 ns.fread(sf_new)
                 ns.restore(1)
 
                 h.continuerun((np.max(time_array)) * ms)
-                
+
                 self.soma_recording = np.array(soma_recording)
                 self.t = np.array(t)
                 peaks, _ = find_peaks(self.soma_recording, prominence=40)
