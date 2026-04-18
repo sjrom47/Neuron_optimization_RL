@@ -43,8 +43,8 @@ class FourierWaveform(Waveform):
             "c2": (-self.max_amplitude, self.max_amplitude),
             "f1": (0.001, 100.0),  # Hz
             "f2": (0.001, 100.0),  # Hz
-            "duty_cycle": (0.0, 1.0),  # fraction of period
-            "period": (0.001, 30.0),  # milliseconds
+            "duty_cycle": (0.01, 1.0),  # fraction of period
+            "period": (0.01, 30.0),  # milliseconds
             "phase_1": (0.0, 2 * np.pi),  # radians
             "phase_2": (0.0, 2 * np.pi),  # radians
             "delay": (0.0, 30.0),  # milliseconds

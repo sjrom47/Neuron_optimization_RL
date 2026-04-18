@@ -1,9 +1,18 @@
+import os
+from datetime import datetime
+
 import gymnasium
 import numpy as np
 from stable_baselines3 import SAC
+from stable_baselines3.common.callbacks import CallbackList, ProgressBarCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.noise import NormalActionNoise
 
+from callbacks import (
+    BestResponseCallback,
+    DiagnosticsCallback,
+    TrainingProgressCallback,
+)
 from criterions import MinEnergy, SelectivityCriterion
 from environment import NEURONEnv
 
@@ -15,10 +24,34 @@ class SACClass:
         self.criterion = criterion
         self.lr = lr
         self.timesteps = timesteps
-        self.model = SAC("MlpPolicy", self.env, learning_rate=self.lr)
+        self.model = SAC(
+            "MlpPolicy",
+            self.env,
+            learning_rate=self.lr,
+            buffer_size=200000,
+            learning_starts=5000,
+            batch_size=256,
+            train_freq=1,
+            gradient_steps=4,
+            gamma=0.0,
+            verbose=1,
+        )
 
     def train(self):
-        self.model.learn(total_timesteps=self.timesteps)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = os.path.join("plots", f"{timestamp}_sac")
+        self.model.learn(
+            total_timesteps=self.timesteps,
+            log_interval=1,
+            callback=CallbackList(
+                [
+                    ProgressBarCallback(),
+                    BestResponseCallback(run_dir=run_dir),
+                    TrainingProgressCallback(run_dir=run_dir),
+                    DiagnosticsCallback(run_dir=run_dir),
+                ]
+            ),
+        )
         self.model.save("SAC_opt")
 
     def eval(self, eps=10):

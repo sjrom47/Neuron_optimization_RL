@@ -8,7 +8,7 @@ from stable_baselines3.common.callbacks import CallbackList, ProgressBarCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.noise import NormalActionNoise
 
-from callbacks import BestResponseCallback
+from callbacks import BestResponseCallback, TrainingProgressCallback
 from criterions import MinEnergy, SelectivityCriterion
 from environment import NEURONEnv
 
@@ -26,8 +26,10 @@ class RecurrentPPOClass:
             self.env,
             learning_rate=self.lr,
             verbose=1,
-            n_steps=50,
-            batch_size=32,
+            n_steps=256,
+            batch_size=128,
+            gamma=0.0,
+            gae_lambda=0.0,
         )
 
     def train(self):
@@ -36,7 +38,13 @@ class RecurrentPPOClass:
         self.model.learn(
             total_timesteps=self.timesteps,
             log_interval=1,
-            callback=CallbackList([ProgressBarCallback(), BestResponseCallback(run_dir=run_dir)]),
+            callback=CallbackList(
+                [
+                    ProgressBarCallback(),
+                    BestResponseCallback(run_dir=run_dir),
+                    TrainingProgressCallback(run_dir=run_dir),
+                ]
+            ),
         )
         self.model.save("weights/recurrentppo_opt")
 

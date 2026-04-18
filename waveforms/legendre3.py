@@ -13,7 +13,7 @@ class Legendre3Waveform(Waveform):
         period=1.0,
         duty_cycle=0.5,
         delay=0.0,
-        max_amplitude=2000.0,
+        max_amplitude=500.0,
     ):
         super().__init__(max_amplitude)
         self.c0 = c0
@@ -34,27 +34,26 @@ class Legendre3Waveform(Waveform):
             "c0": (-self.max_amplitude, self.max_amplitude),
             "c1": (-self.max_amplitude, self.max_amplitude),
             "c2": (-self.max_amplitude, self.max_amplitude),
-            "period": (0.1, 100.0),  # milliseconds
+            "period": (0.1, 30.0),  # milliseconds
             "duty_cycle": (0.0, 1.0),  # fraction of period
-            "delay": (0.0, 100.0),  # milliseconds
+            "delay": (0.0, 30.0),  # milliseconds
         }
 
     def _resolve_params(self, params):
-        c0 = params.get("c0", self.c0)
-        c1 = params.get("c1", self.c1)
-        c2 = params.get("c2", self.c2)
-        period = params.get("period", self.period)
-        duty_cycle = params.get("duty_cycle", self.duty_cycle)
-        delay = params.get("delay", self.delay)
-
-        return {
-            "c0": c0,
-            "c1": c1,
-            "c2": c2,
-            "period": period,
-            "duty_cycle": duty_cycle,
-            "delay": delay,
+        params = {
+            "c0": params.get("c0", self.normalize_param(self.c0, "c0")),
+            "c1": params.get("c1", self.normalize_param(self.c1, "c1")),
+            "c2": params.get("c2", self.normalize_param(self.c2, "c2")),
+            "period": params.get("period", self.normalize_param(self.period, "period")),
+            "duty_cycle": params.get(
+                "duty_cycle", self.normalize_param(self.duty_cycle, "duty_cycle")
+            ),
+            "delay": params.get("delay", self.normalize_param(self.delay, "delay")),
         }
+        unnormalized_params = {
+            key: self.unnormalize_model_param(params[key], key) for key in params
+        }
+        return unnormalized_params
 
     def _is_active(self, t, params):
         period = params["period"]

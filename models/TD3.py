@@ -8,13 +8,17 @@ from stable_baselines3.common.callbacks import CallbackList, ProgressBarCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.noise import NormalActionNoise
 
-from callbacks import BestResponseCallback
+from callbacks import (
+    BestResponseCallback,
+    DiagnosticsCallback,
+    TrainingProgressCallback,
+)
 from criterions import MinEnergy, SelectivityCriterion
 from environment import NEURONEnv
 
 
 class TD3Class:
-    def __init__(self, env, waveform, criterion, lr, timesteps, sigma=0.1):
+    def __init__(self, env, waveform, criterion, lr, timesteps, sigma=0.15):
         self.env = env
         self.waveform = waveform
         self.criterion = criterion
@@ -30,8 +34,17 @@ class TD3Class:
             self.env,
             learning_rate=self.lr,
             action_noise=action_noise,
-            learning_starts=2000,
-            train_freq=4,
+            buffer_size=50000,
+            learning_starts=1000,
+            batch_size=256,
+            train_freq=(1, "step"),
+            gradient_steps=8,
+            target_policy_noise=0.2,
+            target_noise_clip=0.5,
+            policy_delay=2,
+            tau=0.005,
+            gamma=0.0,
+            verbose=1,
         )
 
     def train(self):
@@ -40,7 +53,12 @@ class TD3Class:
         self.model.learn(
             total_timesteps=self.timesteps,
             callback=CallbackList(
-                [ProgressBarCallback(), BestResponseCallback(run_dir=run_dir)]
+                [
+                    ProgressBarCallback(),
+                    BestResponseCallback(run_dir=run_dir),
+                    TrainingProgressCallback(run_dir=run_dir),
+                    DiagnosticsCallback(run_dir=run_dir),
+                ]
             ),
             log_interval=1,
         )

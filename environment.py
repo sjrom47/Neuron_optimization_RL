@@ -5,7 +5,8 @@ os.environ["NEURON_MODULE_OPTIONS"] = "-nogui -NSTACK 100000 -NFRAME 20000"
 
 
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from gymnasium import Env, spaces
@@ -19,21 +20,23 @@ from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 class NEURONEnv(Env):
     def __init__(
-        self, waveform_type, criterion_type, max_actions=10, sampling_rate=1e5
+        self, waveform_type, criterion_type, max_actions=10, sampling_rate=2.5e4
     ):
         super().__init__()
 
         # self.neuron_types = [6, 7, 35, 36]
         self.neuron_types = [36]
 
-        self.criterion = self.init_criterion(criterion_type)
+        self.waveform = self.init_waveform(waveform_type)
+        self.criterion = self.init_criterion(
+            criterion_type, max_amplitude=self.waveform.max_amplitude
+        )
         # TODO: we will have to actually see if we use the 4 neuron types or we decide to use more
         self.n_neuron_state_params = (
             3 * len(self.neuron_types)
             if self.criterion.requires_multiple_responses
             else 3
         )
-        self.waveform = self.init_waveform(waveform_type)
         total_dim = (
             1  # electrode_radius
             + 1  # theta
@@ -69,6 +72,9 @@ class NEURONEnv(Env):
         self.stimulation_duration = 30  # ms
         self.delay_init = 2000  # ms
         self.delay_final = 5  # ms
+        self.vm_min = -100.0
+        self.vm_max = 40.0
+        self.fr_tanh_scale = 300.0
 
     def get_obs(self):
         return np.concatenate(
@@ -92,9 +98,9 @@ class NEURONEnv(Env):
         else:
             raise ValueError(f"Unsupported waveform type: {waveform_type}")
 
-    def init_criterion(self, criterion_type, **kwargs):
+    def init_criterion(self, criterion_type, max_amplitude=500.0, **kwargs):
         if criterion_type == "min_energy":
-            return MinEnergy(**kwargs)
+            return MinEnergy(max_amplitude=max_amplitude, **kwargs)
         elif criterion_type == "selectivity":
             return SelectivityCriterion(**kwargs)
         else:
@@ -117,6 +123,9 @@ class NEURONEnv(Env):
         return responses, times
 
     def step(self, action):
+        action = np.asarray(action, dtype=float).reshape(-1)
+        action = np.clip(action, self.action_space.low, self.action_space.high)
+
         action_dict = {
             key: action[i] for i, key in enumerate(self.waveform.param_bounds.keys())
         }
@@ -139,10 +148,17 @@ class NEURONEnv(Env):
             responses[0]
         )  # Get params for the first response
         self.state["last_stimulation_params"] = np.array(stimulation_params)
+        spikes = int(self.criterion.calculate_n_spikes(responses[0]))
+        state_fr = float(stimulation_params[0])
+        state_peak_vm = float(stimulation_params[1])
+        state_last_mp = float(stimulation_params[2])
 
         self.actions_taken += 1
-        terminated = self.actions_taken >= self.max_actions
-        truncated = False  # You can implement truncation logic if needed
+        # Reaching max_actions is a time limit, not a terminal state. Using
+        # truncated (not terminated) lets SB3 bootstrap V(s') at the boundary
+        # instead of zeroing it, which is the right target for this problem.
+        terminated = False
+        truncated = self.actions_taken >= self.max_actions
         unnormalized_params = {
             key: self.waveform.unnormalize_model_param(action[i], key)
             for i, key in enumerate(self.waveform.param_bounds.keys())
@@ -153,6 +169,10 @@ class NEURONEnv(Env):
             "time_response": times[0],
             "params": unnormalized_params,
             "reward": reward,
+            "spikes": spikes,
+            "state_fr": state_fr,
+            "state_peak_vm": state_peak_vm,
+            "state_last_mp": state_last_mp,
             "terminated": terminated,
             "max_amplitude": self.waveform.max_amplitude,
             "sampling_rate": self.sampling_rate,
@@ -217,10 +237,19 @@ class NEURONEnv(Env):
         return soma_recording, t_neuron
 
     def get_stimulation_params(self, response):
-        fr = firing_rate(response, np.arange(len(response)) / self.sampling_rate)
-        peak_vm = np.max(response)
-        last_mp = response[-1]
+        fr_raw = firing_rate(response, np.arange(len(response)) / self.sampling_rate)
+        fr = self._normalize_firing_rate(fr_raw)
+        peak_vm = self._normalize_voltage(np.max(response))
+        last_mp = self._normalize_voltage(response[-1])
         return fr, peak_vm, last_mp
+
+    def _normalize_firing_rate(self, fr):
+        scale = max(float(self.fr_tanh_scale), 1e-9)
+        return float(np.tanh(float(fr) / scale))
+
+    def _normalize_voltage(self, vm):
+        vm = float(np.clip(vm, self.vm_min, self.vm_max))
+        return 2.0 * (vm - self.vm_min) / (self.vm_max - self.vm_min) - 1.0
 
     def default_stimulation(self):
         default_params = {key: 0.0 for key in self.waveform.param_bounds.keys()}
@@ -329,4 +358,5 @@ class NEURONEnv(Env):
             self.waveform.n_params
         )  # No previous waveform parameters at reset
 
+        return self.get_obs(), {}
         return self.get_obs(), {}

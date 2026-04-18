@@ -1,9 +1,9 @@
 import argparse
 
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from environment import NEURONEnv
-from models import RecurrentPPOClass, SACClass, TD3Class, TQCClass
+from models import PPOClass, RecurrentPPOClass, SACClass, TD3Class, TQCClass
 
 
 def parse_args():
@@ -32,6 +32,12 @@ def parse_args():
     parser.add_argument(
         "--timesteps", type=int, default=50000, help="Number of training timesteps"
     )
+    parser.add_argument(
+        "--normalize_obs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable observation normalization with VecNormalize (disabled by default)",
+    )
     return parser.parse_args()
 
 
@@ -50,14 +56,18 @@ if __name__ == "__main__":
     # env = DummyVecEnv([make_env(args.waveform_type, args.criterion_type)])
     # print('env created')
     # Attempt #1 to increase speed: Parallelization of environments
-    num_envs = 8
+    num_envs = 12
     envs = []
     for i in range(num_envs):
         envs.append(make_env(args.waveform_type, args.criterion_type))
     env = SubprocVecEnv(envs, start_method="spawn")
+    if args.normalize_obs:
+        env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.0)
 
     # TODO: maybe refactor into a factory at some point
-    if args.model_type == "recurrentppo":
+    if args.model_type == "ppo":
+        model_class = PPOClass
+    elif args.model_type == "recurrentppo":
         model_class = RecurrentPPOClass
     elif args.model_type == "sac":
         model_class = SACClass
@@ -76,4 +86,7 @@ if __name__ == "__main__":
         timesteps=args.timesteps,
     )
     model.train()
+    if args.normalize_obs and hasattr(model.env, "training"):
+        model.env.training = False
+        model.env.norm_reward = False
     model.eval()
