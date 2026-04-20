@@ -9,10 +9,11 @@ from callbacks import BestResponseCallback, TrainingProgressCallback
 
 
 class PPOClass:
-    def __init__(self, env, waveform, criterion, lr, timesteps):
+    def __init__(self, env, waveform, criterion, lr, timesteps, cell_id=36):
         self.env = env
         self.waveform = waveform
         self.criterion = criterion
+        self.cell_id = cell_id
         self.lr = lr
         self.timesteps = timesteps
         self.model = PPO(
@@ -28,7 +29,7 @@ class PPOClass:
 
     def train(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = os.path.join("plots", f"{timestamp}_ppo")
+        run_dir = os.path.join("plots", f"{timestamp}_ppo_cell{self.cell_id}")
         self.model.learn(
             total_timesteps=self.timesteps,
             log_interval=1,
@@ -40,7 +41,7 @@ class PPOClass:
                 ]
             ),
         )
-        self.model.save("weights/ppo_opt")
+        self.model.save(f"weights/ppo_{self.waveform}_{self.criterion}_cell{self.cell_id}_opt")
 
     def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)

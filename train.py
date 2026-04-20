@@ -1,5 +1,6 @@
 import argparse
 
+import ray
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from environment import NEURONEnv
@@ -38,13 +39,22 @@ def parse_args():
         default=False,
         help="Enable observation normalization with VecNormalize (disabled by default)",
     )
+    parser.add_argument(
+        "--max_amplitude",
+        type=float,
+        default=1000.0,
+        help="Max waveform amplitude (mA)",
+    )
     return parser.parse_args()
 
 
-def make_env(waveform_type, criterion_type):
+def make_env(waveform_type, criterion_type, max_amplitude=500.0):
     def _init():
         return NEURONEnv(
-            waveform_type=waveform_type, criterion_type=criterion_type, max_actions=10
+            waveform_type=waveform_type,
+            criterion_type=criterion_type,
+            max_actions=10,
+            max_amplitude=max_amplitude,
         )
 
     return _init
@@ -53,14 +63,20 @@ def make_env(waveform_type, criterion_type):
 if __name__ == "__main__":
     # Example usage
     args = parse_args()
+    # Start a single local Ray head here so every SubprocVecEnv worker can
+    # attach to it via address="auto" instead of each spinning up its own.
+    ray.init(ignore_reinit_error=True, log_to_driver=False)
     # env = DummyVecEnv([make_env(args.waveform_type, args.criterion_type)])
     # print('env created')
     # Attempt #1 to increase speed: Parallelization of environments
-    num_envs = 12
+    num_envs = 8
     envs = []
     for i in range(num_envs):
-        envs.append(make_env(args.waveform_type, args.criterion_type))
+        envs.append(
+            make_env(args.waveform_type, args.criterion_type, args.max_amplitude)
+        )
     env = SubprocVecEnv(envs, start_method="spawn")
+    cell_id = env.get_attr("neuron_types")[0][0]
     if args.normalize_obs:
         env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.0)
 
@@ -84,6 +100,7 @@ if __name__ == "__main__":
         args.criterion_type,
         lr=args.lr,
         timesteps=args.timesteps,
+        cell_id=cell_id,
     )
     model.train()
     if args.normalize_obs and hasattr(model.env, "training"):

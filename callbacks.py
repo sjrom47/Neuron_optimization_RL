@@ -177,35 +177,54 @@ class TrainingProgressCallback(BaseCallback):
 
 
 class DiagnosticsCallback(BaseCallback):
-    """Writes periodic training diagnostics to CSV for debugging instability."""
+    """Writes one CSV row per completed episode for per-episode diagnostics."""
 
-    def __init__(self, run_dir="plots", log_freq=50):
+    def __init__(self, run_dir="plots"):
         super().__init__()
         self.run_dir = run_dir
-        self.log_freq = log_freq
         self.csv_path = os.path.join(self.run_dir, "debug_metrics.csv")
         self._field_names = [
+            "episode",
             "timesteps",
-            "callback_step",
-            "reward_mean",
-            "reward_min",
-            "reward_max",
-            "done_rate",
-            "action_abs_mean",
-            "action_std",
+            "episode_return",
+            "episode_length",
             "spikes_mean",
             "state_fr_mean",
             "state_peak_vm_mean",
             "state_last_mp_mean",
+            "electrode_radius",
+            "theta",
+            "phi",
             "period_mean",
             "amplitude_mean",
             "duty_cycle_mean",
             "delay_mean",
+            "action_abs_mean",
+            "action_std",
             "train_actor_loss",
             "train_critic_loss",
-            "train_ent_coef",
-            "train_ent_coef_loss",
         ]
+        self._episode_count = 0
+        self._env_accumulators = None
+
+    def _init_accumulator(self):
+        return {
+            "reward": 0.0,
+            "length": 0,
+            "spikes": [],
+            "state_fr": [],
+            "state_peak_vm": [],
+            "state_last_mp": [],
+            "electrode_radius": np.nan,
+            "theta": np.nan,
+            "phi": np.nan,
+            "period": [],
+            "amplitude": [],
+            "duty_cycle": [],
+            "delay": [],
+            "action_abs": [],
+            "action_vals": [],
+        }
 
     def _on_training_start(self):
         os.makedirs(self.run_dir, exist_ok=True)
@@ -215,15 +234,12 @@ class DiagnosticsCallback(BaseCallback):
 
     @staticmethod
     def _safe_mean(values):
-        if len(values) == 0:
-            return np.nan
-        return float(np.mean(values))
+        return float(np.mean(values)) if len(values) > 0 else np.nan
 
     @staticmethod
     def _safe_param_value(value):
         try:
-            arr = np.asarray(value, dtype=float)
-            return float(np.mean(arr))
+            return float(np.mean(np.asarray(value, dtype=float)))
         except Exception:
             return np.nan
 
@@ -243,77 +259,79 @@ class DiagnosticsCallback(BaseCallback):
             return np.nan
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.log_freq != 0:
-            return True
-
         infos = self.locals.get("infos", [])
         rewards = np.asarray(self.locals.get("rewards", []), dtype=float).reshape(-1)
         dones = np.asarray(self.locals.get("dones", []), dtype=bool).reshape(-1)
         actions = self.locals.get("actions")
-
-        action_abs_mean = np.nan
-        action_std = np.nan
         if actions is not None:
             actions = np.asarray(actions, dtype=float)
-            action_abs_mean = float(np.mean(np.abs(actions)))
-            action_std = float(np.std(actions))
 
-        spikes = []
-        state_frs = []
-        state_peak_vms = []
-        state_last_mps = []
-        periods = []
-        amplitudes = []
-        duty_cycles = []
-        delays = []
+        n_envs = len(rewards)
+        if self._env_accumulators is None:
+            self._env_accumulators = [self._init_accumulator() for _ in range(n_envs)]
 
-        for info in infos:
+        rows = []
+        for i in range(n_envs):
+            acc = self._env_accumulators[i]
+            info = infos[i] if i < len(infos) else {}
+
+            acc["reward"] += float(rewards[i])
+            acc["length"] += 1
+
             if info.get("spikes") is not None:
-                spikes.append(float(info["spikes"]))
+                acc["spikes"].append(float(info["spikes"]))
             if info.get("state_fr") is not None:
-                state_frs.append(float(info["state_fr"]))
+                acc["state_fr"].append(float(info["state_fr"]))
             if info.get("state_peak_vm") is not None:
-                state_peak_vms.append(float(info["state_peak_vm"]))
+                acc["state_peak_vm"].append(float(info["state_peak_vm"]))
             if info.get("state_last_mp") is not None:
-                state_last_mps.append(float(info["state_last_mp"]))
+                acc["state_last_mp"].append(float(info["state_last_mp"]))
+            if info.get("electrode_radius") is not None:
+                acc["electrode_radius"] = float(info["electrode_radius"])
+            if info.get("theta") is not None:
+                acc["theta"] = float(info["theta"])
+            if info.get("phi") is not None:
+                acc["phi"] = float(info["phi"])
 
             params = info.get("params")
             if isinstance(params, dict):
-                if "period" in params:
-                    periods.append(self._safe_param_value(params["period"]))
-                if "amplitude" in params:
-                    amplitudes.append(self._safe_param_value(params["amplitude"]))
-                if "duty_cycle" in params:
-                    duty_cycles.append(self._safe_param_value(params["duty_cycle"]))
-                if "delay" in params:
-                    delays.append(self._safe_param_value(params["delay"]))
+                for key in ("period", "amplitude", "duty_cycle", "delay"):
+                    if key in params:
+                        acc[key].append(self._safe_param_value(params[key]))
 
-        row = {
-            "timesteps": int(self.num_timesteps),
-            "callback_step": int(self.n_calls),
-            "reward_mean": float(np.mean(rewards)) if rewards.size > 0 else np.nan,
-            "reward_min": float(np.min(rewards)) if rewards.size > 0 else np.nan,
-            "reward_max": float(np.max(rewards)) if rewards.size > 0 else np.nan,
-            "done_rate": float(np.mean(dones)) if dones.size > 0 else np.nan,
-            "action_abs_mean": action_abs_mean,
-            "action_std": action_std,
-            "spikes_mean": self._safe_mean(spikes),
-            "state_fr_mean": self._safe_mean(state_frs),
-            "state_peak_vm_mean": self._safe_mean(state_peak_vms),
-            "state_last_mp_mean": self._safe_mean(state_last_mps),
-            "period_mean": self._safe_mean(periods),
-            "amplitude_mean": self._safe_mean(amplitudes),
-            "duty_cycle_mean": self._safe_mean(duty_cycles),
-            "delay_mean": self._safe_mean(delays),
-            "train_actor_loss": self._logger_value("train/actor_loss"),
-            "train_critic_loss": self._logger_value("train/critic_loss"),
-            "train_ent_coef": self._logger_value("train/ent_coef"),
-            "train_ent_coef_loss": self._logger_value("train/ent_coef_loss"),
-        }
+            if actions is not None and i < len(actions):
+                acc["action_abs"].append(float(np.mean(np.abs(actions[i]))))
+                acc["action_vals"].extend(actions[i].reshape(-1).tolist())
 
-        with open(self.csv_path, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=self._field_names)
-            writer.writerow(row)
+            if dones[i]:
+                self._episode_count += 1
+                rows.append({
+                    "episode": self._episode_count,
+                    "timesteps": int(self.num_timesteps),
+                    "episode_return": acc["reward"],
+                    "episode_length": acc["length"],
+                    "spikes_mean": self._safe_mean(acc["spikes"]),
+                    "state_fr_mean": self._safe_mean(acc["state_fr"]),
+                    "state_peak_vm_mean": self._safe_mean(acc["state_peak_vm"]),
+                    "state_last_mp_mean": self._safe_mean(acc["state_last_mp"]),
+                    "electrode_radius": acc["electrode_radius"],
+                    "theta": acc["theta"],
+                    "phi": acc["phi"],
+                    "period_mean": self._safe_mean(acc["period"]),
+                    "amplitude_mean": self._safe_mean(acc["amplitude"]),
+                    "duty_cycle_mean": self._safe_mean(acc["duty_cycle"]),
+                    "delay_mean": self._safe_mean(acc["delay"]),
+                    "action_abs_mean": self._safe_mean(acc["action_abs"]),
+                    "action_std": float(np.std(acc["action_vals"])) if acc["action_vals"] else np.nan,
+                    "train_actor_loss": self._logger_value("train/actor_loss"),
+                    "train_critic_loss": self._logger_value("train/critic_loss"),
+                })
+                self._env_accumulators[i] = self._init_accumulator()
+
+        if rows:
+            with open(self.csv_path, "a", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self._field_names)
+                writer.writerows(rows)
 
         return True
 
@@ -351,6 +369,9 @@ class BestResponseCallback(BaseCallback):
         for key in ("waveform", "response", "time_response"):
             if key in copied and copied[key] is not None:
                 copied[key] = np.array(copied[key], copy=True)
+        for key in ("all_responses", "all_times"):
+            if key in copied and copied[key] is not None:
+                copied[key] = [np.array(r, copy=True) for r in copied[key]]
         if isinstance(copied.get("params"), dict):
             copied["params"] = dict(copied["params"])
         return copied
@@ -392,24 +413,42 @@ class BestResponseCallback(BaseCallback):
         if sampling_rate <= 0:
             sampling_rate = 1.0
 
+        all_responses = info.get("all_responses")
+        all_times = info.get("all_times")
+        neuron_types = info.get("neuron_types")
+        multi = (
+            all_responses is not None
+            and neuron_types is not None
+            and len(all_responses) > 1
+        )
+
         os.makedirs(self.run_dir, exist_ok=True)
         t_waveform = np.arange(len(waveform)) / sampling_rate * 1000  # ms
-
         param_str = " ".join(f"{k}={self._format_param(v)}" for k, v in params.items())
 
-        fig, axs = plt.subplots(2, 1, figsize=(12, 6), sharex=False)
-        fig.suptitle(f"Params: {param_str}\n" f"Reward: {reward:.3f}")
+        n_response_rows = len(all_responses) if multi else 1
+        fig, axs = plt.subplots(1 + n_response_rows, 1, figsize=(12, 3 * (1 + n_response_rows)), sharex=False)
+        fig.suptitle(f"Params: {param_str}\nReward: {reward:.3f}")
+
         axs[0].plot(t_waveform, waveform)
         axs[0].set_title("Stimulation Waveform")
         axs[0].set_xlabel("Time (ms)")
         axs[0].set_ylabel("Amplitude")
         axs[0].set_ylim(-1.1 * max_amplitude, 1.1 * max_amplitude)
 
-        axs[1].plot(time_response, response)
-        axs[1].set_title("Neuron Response")
-        axs[1].set_xlabel("Time (ms)")
-        axs[1].set_ylabel("Voltage (mV)")
-        axs[1].set_ylim(-100, 40)
+        if multi:
+            for i, (resp, t, nt) in enumerate(zip(all_responses, all_times, neuron_types)):
+                axs[1 + i].plot(np.asarray(t, dtype=float), np.asarray(resp, dtype=float))
+                axs[1 + i].set_title(f"Neuron {nt} Response")
+                axs[1 + i].set_xlabel("Time (ms)")
+                axs[1 + i].set_ylabel("Voltage (mV)")
+                axs[1 + i].set_ylim(-100, 40)
+        else:
+            axs[1].plot(time_response, response)
+            axs[1].set_title("Neuron Response")
+            axs[1].set_xlabel("Time (ms)")
+            axs[1].set_ylabel("Voltage (mV)")
+            axs[1].set_ylim(-100, 40)
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.run_dir, f"{plot_name}.png"))

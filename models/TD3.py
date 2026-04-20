@@ -18,10 +18,11 @@ from environment import NEURONEnv
 
 
 class TD3Class:
-    def __init__(self, env, waveform, criterion, lr, timesteps, sigma=0.15):
+    def __init__(self, env, waveform, criterion, lr, timesteps, cell_id=36, sigma=0.15):
         self.env = env
         self.waveform = waveform
         self.criterion = criterion
+        self.cell_id = cell_id
         self.lr = lr
         self.sigma = sigma
         self.timesteps = timesteps
@@ -35,7 +36,7 @@ class TD3Class:
             learning_rate=self.lr,
             action_noise=action_noise,
             buffer_size=50000,
-            learning_starts=1000,
+            learning_starts=5000,
             batch_size=256,
             train_freq=(1, "step"),
             gradient_steps=8,
@@ -49,7 +50,7 @@ class TD3Class:
 
     def train(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = os.path.join("plots", f"{timestamp}_td3")
+        run_dir = os.path.join("plots", f"{timestamp}_td3_cell{self.cell_id}")
         self.model.learn(
             total_timesteps=self.timesteps,
             callback=CallbackList(
@@ -62,7 +63,7 @@ class TD3Class:
             ),
             log_interval=1,
         )
-        self.model.save("td3_opt")
+        self.model.save(f"weights/td3_{self.waveform}_{self.criterion}_cell{self.cell_id}_opt")
 
     def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)

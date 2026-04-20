@@ -18,10 +18,11 @@ from environment import NEURONEnv
 
 
 class SACClass:
-    def __init__(self, env, waveform, criterion, lr, timesteps):
+    def __init__(self, env, waveform, criterion, lr, timesteps, cell_id=36):
         self.env = env
         self.waveform = waveform
         self.criterion = criterion
+        self.cell_id = cell_id
         self.lr = lr
         self.timesteps = timesteps
         self.model = SAC(
@@ -39,7 +40,7 @@ class SACClass:
 
     def train(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = os.path.join("plots", f"{timestamp}_sac")
+        run_dir = os.path.join("plots", f"{timestamp}_sac_cell{self.cell_id}")
         self.model.learn(
             total_timesteps=self.timesteps,
             log_interval=1,
@@ -52,7 +53,7 @@ class SACClass:
                 ]
             ),
         )
-        self.model.save("SAC_opt")
+        self.model.save(f"weights/sac_{self.waveform}_{self.criterion}_cell{self.cell_id}_opt")
 
     def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)

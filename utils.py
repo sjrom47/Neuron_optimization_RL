@@ -3,6 +3,9 @@ from scipy.signal import find_peaks
 
 
 def firing_rate(membrane_potential, t):
+    membrane_potential = np.asarray(membrane_potential)
+    if not membrane_potential.flags.writeable:
+        membrane_potential = membrane_potential.copy()
     peaks, _ = find_peaks(membrane_potential, prominence=40)
     if len(t) < 2:
         return 0.0

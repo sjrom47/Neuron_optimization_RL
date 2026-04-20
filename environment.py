@@ -1,33 +1,38 @@
 import os
 import random
 
-os.environ["NEURON_MODULE_OPTIONS"] = "-nogui -NSTACK 100000 -NFRAME 20000"
-
-
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import ray
 from gymnasium import Env, spaces
 
 from criterions import MinEnergy, SelectivityCriterion
 from elec_field import ICMS
-from neuron_model_serial import NeuronSim
+from neuron_actor import NeuronActor, ensure_ray_initialized
 from utils import firing_rate
 from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
 
 
 class NEURONEnv(Env):
     def __init__(
-        self, waveform_type, criterion_type, max_actions=10, sampling_rate=2.5e4
+        self,
+        waveform_type,
+        criterion_type,
+        max_actions=10,
+        sampling_rate=1e5,
+        max_amplitude=1000.0,
     ):
         super().__init__()
 
         # self.neuron_types = [6, 7, 35, 36]
-        self.neuron_types = [36]
+        # self.neuron_types = [6, 36]
+        self.neuron_types = [36, 6]
+        # self.neuron_types = [36]
 
-        self.waveform = self.init_waveform(waveform_type)
+        self.waveform = self.init_waveform(waveform_type, max_amplitude=max_amplitude)
         self.criterion = self.init_criterion(
             criterion_type, max_amplitude=self.waveform.max_amplitude
         )
@@ -76,6 +81,23 @@ class NEURONEnv(Env):
         self.vm_max = 40.0
         self.fr_tanh_scale = 300.0
 
+        # Each neuron type gets its own Ray actor holding a single NEURON
+        # interpreter — running two cells in one process corrupts NEURON's
+        # global section/pointer state.
+        ensure_ray_initialized()
+        self.actors = {
+            nt: NeuronActor.remote(
+                cell_id=nt,
+                human_or_mice=0,
+                temp=37.0,
+                dt=0.1,
+                sampling_rate=self.sampling_rate,
+                delay_init=self.delay_init,
+                delay_final=self.delay_final,
+            )
+            for nt in self.neuron_types
+        }
+
     def get_obs(self):
         return np.concatenate(
             [
@@ -98,28 +120,28 @@ class NEURONEnv(Env):
         else:
             raise ValueError(f"Unsupported waveform type: {waveform_type}")
 
-    def init_criterion(self, criterion_type, max_amplitude=500.0, **kwargs):
+    def init_criterion(self, criterion_type, max_amplitude=1000.0, **kwargs):
         if criterion_type == "min_energy":
             return MinEnergy(max_amplitude=max_amplitude, **kwargs)
         elif criterion_type == "selectivity":
-            return SelectivityCriterion(**kwargs)
+            return SelectivityCriterion(max_amplitude=max_amplitude, **kwargs)
         else:
             raise ValueError(f"Unsupported criterion type: {criterion_type}")
 
-    def get_neuron_responses(self, waveform):
-        responses = []
-        times = []
+    def _active_neuron_types(self):
         if self.criterion.requires_multiple_responses:
-            for neuron_type in self.neuron_types:
-                response, t = self.simulate_neuron_response(waveform, neuron_type)
-                responses.append(response)
-                times.append(t)
-        else:
-            response, t = self.simulate_neuron_response(
-                waveform, self.state["neuron_type"]
-            )
-            responses.append(response)
-            times.append(t)
+            return list(self.neuron_types)
+        return [int(self.state["neuron_type"])]
+
+    def get_neuron_responses(self, waveform):
+        types = self._active_neuron_types()
+        # Put the waveform in the object store once, then fan out to each
+        # actor so they simulate concurrently. ray.get collects in order.
+        wf_ref = ray.put(np.asarray(waveform))
+        futures = [self.actors[nt].stimulate.remote(wf_ref) for nt in types]
+        results = ray.get(futures)
+        responses = [r[0] for r in results]
+        times = [r[1] for r in results]
         return responses, times
 
     def step(self, action):
@@ -144,10 +166,11 @@ class NEURONEnv(Env):
             [params[key] for key in self.waveform.param_bounds.keys()]
         )
 
-        stimulation_params = self.get_stimulation_params(
-            responses[0]
-        )  # Get params for the first response
-        self.state["last_stimulation_params"] = np.array(stimulation_params)
+        all_stimulation_params = []
+        for r in responses:
+            all_stimulation_params.extend(self.get_stimulation_params(r))
+        stimulation_params = all_stimulation_params[:3]
+        self.state["last_stimulation_params"] = np.array(all_stimulation_params)
         spikes = int(self.criterion.calculate_n_spikes(responses[0]))
         state_fr = float(stimulation_params[0])
         state_peak_vm = float(stimulation_params[1])
@@ -167,12 +190,22 @@ class NEURONEnv(Env):
             "waveform": waveform,
             "response": responses[0],
             "time_response": times[0],
+            "all_responses": responses,
+            "all_times": times,
+            "neuron_types": (
+                list(self.neuron_types)
+                if self.criterion.requires_multiple_responses
+                else None
+            ),
             "params": unnormalized_params,
             "reward": reward,
             "spikes": spikes,
             "state_fr": state_fr,
             "state_peak_vm": state_peak_vm,
             "state_last_mp": state_last_mp,
+            "electrode_radius": float(self.state["electrode_radius"]),
+            "theta": float(self.state["theta"]),
+            "phi": float(self.state["phi"]),
             "terminated": terminated,
             "max_amplitude": self.waveform.max_amplitude,
             "sampling_rate": self.sampling_rate,
@@ -215,27 +248,6 @@ class NEURONEnv(Env):
         plt.savefig(f"plots/{plot_name}.png")
         plt.close()
 
-    def simulate_neuron_response(self, waveform, neuron_type):
-        time_array = (
-            np.arange(len(waveform)) / self.sampling_rate * 1000
-        )  # convert to ms
-        waveform2 = np.zeros_like(waveform)
-
-        self.neurons[neuron_type].stimulate(
-            time_array=time_array,
-            amp_array=waveform,
-            amp_array2=waveform2,
-            scale1=1,
-            sampling_rate=self.sampling_rate,
-            delay_init=self.delay_init,
-            delay_final=self.delay_final,
-        )
-        soma_recording, t_neuron = self.neurons[neuron_type].save_soma_recording(
-            delay_init=self.delay_init
-        )
-
-        return soma_recording, t_neuron
-
     def get_stimulation_params(self, response):
         fr_raw = firing_rate(response, np.arange(len(response)) / self.sampling_rate)
         fr = self._normalize_firing_rate(fr_raw)
@@ -260,98 +272,51 @@ class NEURONEnv(Env):
         )
         return default_waveform
 
-    def init_neuron(self, neuron_type, elec_field):
-        default_waveform = self.default_stimulation()
-
-        time_array = np.arange(len(default_waveform)) / self.sampling_rate
-        neuron = NeuronSim(
-            human_or_mice=0,
-            cell_id=neuron_type,
-            temp=37.0,
-            dt=0.1,
-            elec_field=elec_field,
-            elec_field2=None,
-        )
-        neuron._set_xtra_param(angle=np.array([0, 0]), pos_neuron=np.array([0, 0, 0]))
-
-        delay_init, delay_final = self.delay_init, self.delay_final
-        save_state = os.path.join(
-            os.getcwd(),
-            "cells/SaveState/human_or_mice0cell-"
-            + str(neuron_type)
-            + "_Temp-37.0C_dt-100.0us_delay-"
-            + str(delay_init)
-            + "ms.bin",
-        )
-        if not os.path.exists(save_state):
-            n_samples = int(delay_init / (0.025 * 1e-3 * self.sampling_rate)) + 1
-            time_array = np.arange(n_samples) / self.sampling_rate
-            amp_array = np.zeros(n_samples)
-            neuron.stimulate(
-                time_array=time_array,
-                amp_array=amp_array,
-                amp_array2=amp_array.copy(),
-                sampling_rate=self.sampling_rate,
-                delay_init=delay_init,
-                delay_final=delay_final,
-                save_state_show=False,
-            )
-        return neuron
-
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
         self.actions_taken = 0
 
+        if random.random() < 0.5:
+            phi = random.uniform(0.0, np.pi / 4)
+        else:
+            phi = random.uniform(3 * np.pi / 4, np.pi)
+
         self.state["electrode_radius"] = np.float64(1)
         self.state["theta"] = np.float64(0)
         self.state["phi"] = np.float64(0)
-        # self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
-        # self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
-        # self.state["phi"] = np.float64(random.uniform(0.0, np.pi))
-        self.state["neuron_type"] = int(random.choice(self.neuron_types))
+        self.state["electrode_radius"] = np.float64(random.uniform(0.9, 1.1))
+        self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
+        self.state["phi"] = np.float64(phi)
+        # self.state["neuron_type"] = int(random.choice(self.neuron_types))
+        self.state["neuron_type"] = int(self.neuron_types[0])
 
         r = float(self.state["electrode_radius"])
         theta = float(self.state["theta"])
         phi = float(self.state["phi"])
-        x = 0
-        y = 1
-        z = 0
-        # x = r * np.sin(phi) * np.cos(theta)
-        # y = r * np.sin(phi) * np.sin(theta)
-        # z = r * np.cos(phi)
+        x = r * np.sin(phi) * np.cos(theta)
+        y = r * np.sin(phi) * np.sin(theta)
+        z = r * np.cos(phi)
 
         default_waveform = self.default_stimulation()
 
         self.elec_field = ICMS(x=x, y=y, z=z, conductivity=0.33)
-        self.neurons = {}
-        self.neurons[self.state["neuron_type"]] = self.init_neuron(
-            self.state["neuron_type"], self.elec_field
-        )
-        if self.criterion.requires_multiple_responses:
-            for neuron_type in self.neuron_types:
-                if neuron_type == self.state["neuron_type"]:
-                    continue  # Skip the already initialized neuron for the selected neuron type
-                neuron = self.init_neuron(neuron_type, self.elec_field)
-                self.neurons[neuron_type] = neuron
 
-        response, _ = self.simulate_neuron_response(
-            default_waveform, self.state["neuron_type"]
+        types_to_eval = self._active_neuron_types()
+        # Push the new field to each active actor and wait for it to land
+        # (stimulate depends on the updated xtra params). Then fan out the
+        # default waveform so both cells simulate concurrently.
+        ray.get(
+            [self.actors[nt].set_field.remote(self.elec_field) for nt in types_to_eval]
+        )
+        wf_ref = ray.put(np.asarray(default_waveform))
+        results = ray.get(
+            [self.actors[nt].stimulate.remote(wf_ref) for nt in types_to_eval]
         )
 
         neuron_stimulation_params = []
-        base_neuron_stimulation_params = self.get_stimulation_params(response)
-        neuron_stimulation_params.extend(base_neuron_stimulation_params)
-
-        if self.criterion.requires_multiple_responses:
-            for neuron_type in self.neuron_types:
-                if neuron_type == self.state["neuron_type"]:
-                    continue  # Skip the already computed response for the selected neuron type
-                response, _ = self.simulate_neuron_response(
-                    default_waveform, neuron_type
-                )
-                params = self.get_stimulation_params(response)
-                neuron_stimulation_params.extend(params)
+        for response, _ in results:
+            neuron_stimulation_params.extend(self.get_stimulation_params(response))
         self.state["last_stimulation_params"] = np.array(neuron_stimulation_params)
 
         self.state["last_waveform_params"] = np.zeros(
@@ -359,4 +324,18 @@ class NEURONEnv(Env):
         )  # No previous waveform parameters at reset
 
         return self.get_obs(), {}
-        return self.get_obs(), {}
+
+    def close(self):
+        actors = getattr(self, "actors", {})
+        for a in actors.values():
+            try:
+                ray.kill(a)
+            except Exception:
+                pass
+        self.actors = {}
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass

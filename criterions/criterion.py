@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
 from scipy.signal import find_peaks
 
 
@@ -15,6 +16,8 @@ class Criterion(ABC):
 
     @staticmethod
     def calculate_n_spikes(signal):
-        # TODO: check for shape issues
+        signal = np.asarray(signal)
+        if not signal.flags.writeable:
+            signal = signal.copy()
         peaks, _ = find_peaks(signal, prominence=40)
         return len(peaks)

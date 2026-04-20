@@ -34,4 +34,10 @@ class MinEnergy(Criterion):
         # cannot escape: exploring toward larger amplitudes pays the energy
         # cost before discovering spikes.
         energy_penalty = self._lambda * energy_frac if spikes > 0 else 0.0
-        return spikes + depol - energy_penalty
+
+        # Scale depol by 1/λ so its maximum (1/λ) is always below the net
+        # benefit of one spike at the break-even energy level (energy_frac=1/λ).
+        # Without this, near-threshold depolarization without spiking yields a
+        # higher reward than actually spiking at high energy cost.
+        depol_weight = 1.0 / max(self._lambda, 1.0)
+        return spikes + depol_weight * depol - energy_penalty

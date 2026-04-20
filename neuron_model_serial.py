@@ -72,7 +72,7 @@ class NeuronSim:
        
             def _set_extracellular_stim(self):
                 h.load_file(cwd+"/Backend_Code/fixnseg.hoc")
-                h('geom_nseg(80)')
+                h('geom_nseg(40)')
 
                 for sec in h.allsec():
                     if sec.nseg == 1:
@@ -143,7 +143,10 @@ class NeuronSim:
                 for sec in h.main_ax_list:
                     coord_3d_main_axon.append([sec(0.5).xtra.x, sec(0.5).xtra.y, sec(0.5).xtra.z])
                 coord_3d_main_axon = np.array(coord_3d_main_axon)
-                #print(1,coord_3d_main_axon.shape)
+                if coord_3d_main_axon.ndim < 2 or coord_3d_main_axon.shape[0] < 2:
+                    raise RuntimeError(
+                        f"main_ax_list has {len(coord_3d_main_axon)} entries — wrong cell loaded or axon not found"
+                    )
                 uu, dd, vv = np.linalg.svd(coord_3d_main_axon - np.mean(coord_3d_main_axon, axis=0))
                 axon_dir = vv[0]/np.sqrt(np.sum(vv[0]**2)) 
                 axon_dir_sph = self._cart_to_sph(axon_dir)

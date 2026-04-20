@@ -15,10 +15,11 @@ from environment import NEURONEnv
 
 # TODO: we should consider refactoring this into an abstract base class for all models
 class RecurrentPPOClass:
-    def __init__(self, env, waveform, criterion, lr, timesteps):
+    def __init__(self, env, waveform, criterion, lr, timesteps, cell_id=36):
         self.env = env
         self.waveform = waveform
         self.criterion = criterion
+        self.cell_id = cell_id
         self.lr = lr
         self.timesteps = timesteps
         self.model = RecurrentPPO(
@@ -34,7 +35,7 @@ class RecurrentPPOClass:
 
     def train(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = os.path.join("plots", f"{timestamp}_recurrentppo")
+        run_dir = os.path.join("plots", f"{timestamp}_recurrentppo_cell{self.cell_id}")
         self.model.learn(
             total_timesteps=self.timesteps,
             log_interval=1,
@@ -46,7 +47,7 @@ class RecurrentPPOClass:
                 ]
             ),
         )
-        self.model.save("weights/recurrentppo_opt")
+        self.model.save(f"weights/recurrentppo_{self.waveform}_{self.criterion}_cell{self.cell_id}_opt")
 
     def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)
