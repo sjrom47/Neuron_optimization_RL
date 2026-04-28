@@ -336,6 +336,83 @@ class DiagnosticsCallback(BaseCallback):
         return True
 
 
+class WaveformSnapshotCallback(BaseCallback):
+    """Saves a grid of recent waveforms every snap_freq episodes so you can
+    see what the policy is actually generating throughout training."""
+
+    def __init__(self, run_dir="plots", snap_freq=20, n_waveforms=8):
+        super().__init__()
+        self.run_dir = run_dir
+        self.snap_freq = snap_freq
+        self.n_waveforms = n_waveforms
+        self._episode_count = 0
+        self._buffer = []  # list of (waveform, reward, params, sampling_rate)
+
+    def _on_step(self) -> bool:
+        infos = self.locals.get("infos", [])
+        rewards = np.asarray(self.locals.get("rewards", []), dtype=float).reshape(-1)
+        dones = np.asarray(self.locals.get("dones", []), dtype=bool).reshape(-1)
+
+        for i, info in enumerate(infos):
+            waveform = info.get("waveform")
+            if waveform is None:
+                continue
+            self._buffer.append((
+                np.array(waveform, copy=True),
+                float(rewards[i]),
+                dict(info.get("params", {})),
+                float(info.get("sampling_rate", 1.0)),
+                float(info.get("max_amplitude", 500.0)),
+            ))
+            if len(self._buffer) > self.n_waveforms:
+                self._buffer.pop(0)
+
+            if dones[i]:
+                self._episode_count += 1
+                if self._episode_count % self.snap_freq == 0:
+                    self._save_snapshot()
+
+        return True
+
+    def _on_training_end(self):
+        self._save_snapshot()
+
+    def _save_snapshot(self):
+        if not self._buffer:
+            return
+
+        snap_dir = os.path.join(self.run_dir, "waveform_snapshots")
+        os.makedirs(snap_dir, exist_ok=True)
+
+        n = len(self._buffer)
+        ncols = min(4, n)
+        nrows = (n + ncols - 1) // ncols
+
+        fig, axs = plt.subplots(nrows, ncols, figsize=(5 * ncols, 3 * nrows), squeeze=False)
+        fig.suptitle(f"Waveform Snapshots — Episode {self._episode_count}", fontsize=12)
+
+        for idx, (waveform, reward, params, sr, max_amp) in enumerate(self._buffer):
+            row, col = divmod(idx, ncols)
+            ax = axs[row][col]
+            t = np.arange(len(waveform)) / sr * 1000.0
+            ax.plot(t, waveform, linewidth=0.8)
+            ax.set_ylim(-1.1 * max_amp, 1.1 * max_amp)
+            ax.set_xlabel("Time (ms)", fontsize=7)
+            ax.set_ylabel("Amp (µA)", fontsize=7)
+            param_str = "  ".join(f"{k}={v:.2f}" for k, v in list(params.items())[:3])
+            ax.set_title(f"r={reward:.2f}\n{param_str}", fontsize=7)
+            ax.tick_params(labelsize=6)
+
+        for idx in range(n, nrows * ncols):
+            row, col = divmod(idx, ncols)
+            axs[row][col].axis("off")
+
+        plt.tight_layout()
+        fname = os.path.join(snap_dir, f"ep_{self._episode_count:05d}.png")
+        plt.savefig(fname, dpi=100)
+        plt.close()
+
+
 class BestResponseCallback(BaseCallback):
     """Tracks the global best single-step response across parallel workers."""
 

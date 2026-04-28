@@ -9,11 +9,27 @@ import numpy as np
 import ray
 from gymnasium import Env, spaces
 
+from config import (
+    DELAY_FINAL,
+    DELAY_INIT,
+    NEURON_DT,
+    NEURON_HUMAN_OR_MICE,
+    NEURON_TEMP,
+    NEURON_TYPES,
+    SAMPLING_RATE,
+    STIMULATION_DURATION,
+)
 from criterions import MinEnergy, SelectivityCriterion
 from elec_field import ICMS
 from neuron_actor import NeuronActor, ensure_ray_initialized
 from utils import firing_rate
-from waveforms import FourierWaveform, Legendre3Waveform, SquareWaveform
+from waveforms import (
+    ChargeBalancedWaveform,
+    FourierWaveform,
+    Legendre3Waveform,
+    SquareWaveform,
+    TwoSinesWaveform,
+)
 
 
 class NEURONEnv(Env):
@@ -22,15 +38,12 @@ class NEURONEnv(Env):
         waveform_type,
         criterion_type,
         max_actions=10,
-        sampling_rate=1e5,
+        sampling_rate=SAMPLING_RATE,
         max_amplitude=1000.0,
     ):
         super().__init__()
 
-        # self.neuron_types = [6, 7, 35, 36]
-        # self.neuron_types = [6, 36]
-        self.neuron_types = [36, 6]
-        # self.neuron_types = [36]
+        self.neuron_types = NEURON_TYPES
 
         self.waveform = self.init_waveform(waveform_type, max_amplitude=max_amplitude)
         self.criterion = self.init_criterion(
@@ -74,9 +87,9 @@ class NEURONEnv(Env):
         self.actions_taken = 0
         self.max_actions = max_actions
         self.sampling_rate = sampling_rate
-        self.stimulation_duration = 30  # ms
-        self.delay_init = 2000  # ms
-        self.delay_final = 5  # ms
+        self.stimulation_duration = STIMULATION_DURATION
+        self.delay_init = DELAY_INIT
+        self.delay_final = DELAY_FINAL
         self.vm_min = -100.0
         self.vm_max = 40.0
         self.fr_tanh_scale = 300.0
@@ -88,9 +101,9 @@ class NEURONEnv(Env):
         self.actors = {
             nt: NeuronActor.remote(
                 cell_id=nt,
-                human_or_mice=0,
-                temp=37.0,
-                dt=0.1,
+                human_or_mice=NEURON_HUMAN_OR_MICE,
+                temp=NEURON_TEMP,
+                dt=NEURON_DT,
                 sampling_rate=self.sampling_rate,
                 delay_init=self.delay_init,
                 delay_final=self.delay_final,
@@ -117,6 +130,10 @@ class NEURONEnv(Env):
             return Legendre3Waveform(**kwargs)
         elif waveform_type == "square":
             return SquareWaveform(**kwargs)
+        elif waveform_type == "two_sines":
+            return TwoSinesWaveform(**kwargs)
+        elif waveform_type == "charge_balanced":
+            return ChargeBalancedWaveform(**kwargs)
         else:
             raise ValueError(f"Unsupported waveform type: {waveform_type}")
 
@@ -148,8 +165,9 @@ class NEURONEnv(Env):
         action = np.asarray(action, dtype=float).reshape(-1)
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
+        learnable_keys = list(self.waveform.param_bounds.keys())[:self.waveform.n_params]
         action_dict = {
-            key: action[i] for i, key in enumerate(self.waveform.param_bounds.keys())
+            key: action[i] for i, key in enumerate(learnable_keys)
         }
 
         waveform, params = self.waveform.generate_waveform(
@@ -163,7 +181,7 @@ class NEURONEnv(Env):
         reward = self.criterion.evaluate(waveform, responses)
 
         self.state["last_waveform_params"] = np.array(
-            [params[key] for key in self.waveform.param_bounds.keys()]
+            [params[key] for key in learnable_keys]
         )
 
         all_stimulation_params = []
@@ -184,7 +202,7 @@ class NEURONEnv(Env):
         truncated = self.actions_taken >= self.max_actions
         unnormalized_params = {
             key: self.waveform.unnormalize_model_param(action[i], key)
-            for i, key in enumerate(self.waveform.param_bounds.keys())
+            for i, key in enumerate(learnable_keys)
         }
         info = {
             "waveform": waveform,
@@ -277,26 +295,31 @@ class NEURONEnv(Env):
 
         self.actions_taken = 0
 
-        if random.random() < 0.5:
-            phi = random.uniform(0.0, np.pi / 4)
-        else:
-            phi = random.uniform(3 * np.pi / 4, np.pi)
+        # if random.random() < 0.5:
+        #     phi = random.uniform(0.0, np.pi / 4)
+        # else:
+        #     phi = random.uniform(3 * np.pi / 4, np.pi)
+
+        phi = random.uniform(0.0, np.pi)
 
         self.state["electrode_radius"] = np.float64(1)
         self.state["theta"] = np.float64(0)
         self.state["phi"] = np.float64(0)
-        self.state["electrode_radius"] = np.float64(random.uniform(0.9, 1.1))
-        self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
-        self.state["phi"] = np.float64(phi)
+        # self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
+        # self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
+        # self.state["phi"] = np.float64(phi)
         # self.state["neuron_type"] = int(random.choice(self.neuron_types))
         self.state["neuron_type"] = int(self.neuron_types[0])
 
         r = float(self.state["electrode_radius"])
         theta = float(self.state["theta"])
         phi = float(self.state["phi"])
-        x = r * np.sin(phi) * np.cos(theta)
-        y = r * np.sin(phi) * np.sin(theta)
-        z = r * np.cos(phi)
+        # x = r * np.sin(phi) * np.cos(theta)
+        # y = r * np.sin(phi) * np.sin(theta)
+        # z = r * np.cos(phi)
+        x = 0
+        y = 1
+        z = 0
 
         default_waveform = self.default_stimulation()
 

@@ -12,6 +12,7 @@ from callbacks import (
     BestResponseCallback,
     DiagnosticsCallback,
     TrainingProgressCallback,
+    WaveformSnapshotCallback,
 )
 from criterions import MinEnergy, SelectivityCriterion
 from environment import NEURONEnv
@@ -44,7 +45,7 @@ class TD3Class:
             target_noise_clip=0.5,
             policy_delay=2,
             tau=0.005,
-            gamma=0.0,
+            gamma=1,
             verbose=1,
         )
 
@@ -59,11 +60,14 @@ class TD3Class:
                     BestResponseCallback(run_dir=run_dir),
                     TrainingProgressCallback(run_dir=run_dir),
                     DiagnosticsCallback(run_dir=run_dir),
+                    WaveformSnapshotCallback(run_dir=run_dir),
                 ]
             ),
             log_interval=1,
         )
-        self.model.save(f"weights/td3_{self.waveform}_{self.criterion}_cell{self.cell_id}_opt")
+        self.model.save(
+            f"weights/td3_{self.waveform}_{self.criterion}_cell{self.cell_id}_opt"
+        )
 
     def eval(self, eps=10):
         avg_reward = evaluate_policy(self.model, self.env, n_eval_episodes=eps)

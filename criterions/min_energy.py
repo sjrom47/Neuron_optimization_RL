@@ -4,7 +4,7 @@ from criterions.criterion import Criterion
 
 
 class MinEnergy(Criterion):
-    def __init__(self, max_amplitude=500.0, energy_weight=10, spike_threshold_vm=0.0):
+    def __init__(self, max_amplitude=500.0, energy_weight=5, spike_threshold_vm=0.0):
         self.max_amplitude = float(max_amplitude)
         self._lambda = float(energy_weight)
         self._spike_threshold_vm = float(spike_threshold_vm)

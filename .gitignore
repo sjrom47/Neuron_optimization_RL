@@ -217,3 +217,5 @@ __marimo__/
 arm64/
 x86_64/
 weights/
+
+waveform_snapshots/

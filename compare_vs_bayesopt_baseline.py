@@ -41,7 +41,7 @@ def parse_args():
         "--waveform_type",
         type=str,
         default="fourier",
-        choices=["fourier", "legendre3", "square"],
+        choices=["fourier", "legendre3", "square", "two_sines"],
         help="Waveform type for evaluation environment.",
     )
     parser.add_argument(
