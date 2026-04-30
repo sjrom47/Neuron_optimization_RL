@@ -29,15 +29,13 @@ class MinEnergy(Criterion):
         denom = max(self._spike_threshold_vm - resting, 1e-6)
         depol = float(np.clip((peak_vm - resting) / denom, 0.0, 1.0))
 
-        # Gate the energy penalty on actually producing a spike. Otherwise the
-        # trivial zero-amplitude policy is a strong local optimum the agent
-        # cannot escape: exploring toward larger amplitudes pays the energy
-        # cost before discovering spikes.
+        # Do not apply energy penalty if there are no spikes or the flat
+        # waveform becomes a local optimum. This makes optimization much harder
         energy_penalty = self._lambda * energy_frac if spikes > 0 else 0.0
 
-        # Scale depol by 1/λ so its maximum (1/λ) is always below the net
-        # benefit of one spike at the break-even energy level (energy_frac=1/λ).
-        # Without this, near-threshold depolarization without spiking yields a
-        # higher reward than actually spiking at high energy cost.
+        # Scale depol by 1/lambda so its maximum (1/lambda) is always below the
+        # benefit of one spike at the break-even energy level (energy_frac=1/lambda).
+        # Without this, near-threshold depolarization without spiking is better
+        # than actually spiking.
         depol_weight = 1.0 / max(self._lambda, 1.0)
         return spikes + depol_weight * depol - energy_penalty

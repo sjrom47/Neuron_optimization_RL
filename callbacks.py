@@ -1,5 +1,6 @@
 import csv
 import os
+from collections import deque
 
 import matplotlib
 
@@ -410,6 +411,79 @@ class WaveformSnapshotCallback(BaseCallback):
         plt.tight_layout()
         fname = os.path.join(snap_dir, f"ep_{self._episode_count:05d}.png")
         plt.savefig(fname, dpi=100)
+        plt.close()
+
+
+class EpisodeStepRewardCallback(BaseCallback):
+    """Tracks average reward at each step position within an episode and saves a plot."""
+
+    def __init__(self, max_steps=10, run_dir="plots", plot_freq=50, window=200):
+        super().__init__()
+        self.max_steps = max_steps
+        self.run_dir = run_dir
+        self.plot_freq = plot_freq
+        self.window = window
+        self._episode_count = 0
+        self._env_step_counters = None
+        self._env_episode_buffers = None
+        self._step_rewards = [deque(maxlen=window) for _ in range(max_steps)]
+
+    def _on_step(self) -> bool:
+        rewards = np.asarray(self.locals["rewards"], dtype=float).reshape(-1)
+        dones = np.asarray(self.locals["dones"], dtype=bool).reshape(-1)
+
+        n_envs = len(rewards)
+        if self._env_step_counters is None:
+            self._env_step_counters = np.zeros(n_envs, dtype=int)
+            self._env_episode_buffers = [[] for _ in range(n_envs)]
+
+        for i in range(n_envs):
+            step_idx = int(self._env_step_counters[i])
+            if step_idx < self.max_steps:
+                self._env_episode_buffers[i].append(float(rewards[i]))
+
+            if dones[i]:
+                ep = np.array(self._env_episode_buffers[i], dtype=float)
+                std = ep.std()
+                ep_norm = (ep - ep.mean()) / (std if std > 1e-8 else 1.0)
+                for step_j, r in enumerate(ep_norm):
+                    self._step_rewards[step_j].append(float(r))
+
+                self._episode_count += 1
+                self._env_episode_buffers[i] = []
+                self._env_step_counters[i] = 0
+                if self._episode_count % self.plot_freq == 0:
+                    self._save_plot()
+            else:
+                self._env_step_counters[i] += 1
+
+        return True
+
+    def _on_training_end(self):
+        self._save_plot()
+
+    def _save_plot(self):
+        if not any(self._step_rewards):
+            return
+        os.makedirs(self.run_dir, exist_ok=True)
+
+        steps = list(range(1, self.max_steps + 1))
+        means = [np.mean(r) if r else np.nan for r in self._step_rewards]
+        stds = [np.std(r) if r else np.nan for r in self._step_rewards]
+        means = np.array(means)
+        stds = np.array(stds)
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(steps, means, marker="o", color="steelblue", linewidth=2, label="Mean reward")
+        ax.fill_between(steps, means - stds, means + stds, alpha=0.3, color="steelblue", label="±1 std")
+        ax.set_xlabel("Step within episode")
+        ax.set_ylabel("Normalised reward (z-score)")
+        n_eps = min(self._episode_count, self.window)
+        ax.set_title(f"Average Reward per Episode Step (last {n_eps} episodes)")
+        ax.set_xticks(steps)
+        ax.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.run_dir, "reward_per_step.png"))
         plt.close()
 
 

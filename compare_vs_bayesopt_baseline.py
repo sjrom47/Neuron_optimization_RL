@@ -41,7 +41,7 @@ def parse_args():
         "--waveform_type",
         type=str,
         default="fourier",
-        choices=["fourier", "legendre3", "square", "two_sines"],
+        choices=["fourier", "legendre3", "square", "two_sines", "charge_balanced"],
         help="Waveform type for evaluation environment.",
     )
     parser.add_argument(
@@ -110,11 +110,9 @@ def seed_everything(seed):
 
 def normalize_params(params, waveform):
     """Convert unnormalized parameter values to normalized [-1, 1] action array."""
+    learnable_keys = list(waveform.param_bounds.keys())[: waveform.n_params]
     return np.array(
-        [
-            waveform.normalize_param(params[key], key)
-            for key in waveform.param_bounds.keys()
-        ],
+        [waveform.normalize_param(params[key], key) for key in learnable_keys],
         dtype=float,
     )
 
@@ -295,7 +293,8 @@ def run_rl_episode(env, model, is_recurrent):
 
 
 def run_bayesopt_episode(env, episode_idx):
-    client = make_ax_client(env.waveform.param_bounds, episode_idx=episode_idx)
+    learnable_bounds = dict(list(env.waveform.param_bounds.items())[: env.waveform.n_params])
+    client = make_ax_client(learnable_bounds, episode_idx=episode_idx)
 
     obs, _ = env.reset()
     _ = obs

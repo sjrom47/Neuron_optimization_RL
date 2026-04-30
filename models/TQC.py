@@ -8,6 +8,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from callbacks import (
     BestResponseCallback,
     DiagnosticsCallback,
+    EpisodeStepRewardCallback,
     TrainingProgressCallback,
 )
 
@@ -45,6 +46,7 @@ class TQCClass:
                     BestResponseCallback(run_dir=run_dir),
                     TrainingProgressCallback(run_dir=run_dir),
                     DiagnosticsCallback(run_dir=run_dir),
+                    EpisodeStepRewardCallback(run_dir=run_dir),
                 ]
             ),
         )

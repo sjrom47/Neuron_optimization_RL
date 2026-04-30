@@ -8,7 +8,7 @@ from stable_baselines3.common.callbacks import CallbackList, ProgressBarCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.noise import NormalActionNoise
 
-from callbacks import BestResponseCallback, TrainingProgressCallback
+from callbacks import BestResponseCallback, EpisodeStepRewardCallback, TrainingProgressCallback
 from criterions import MinEnergy, SelectivityCriterion
 from environment import NEURONEnv
 
@@ -44,6 +44,7 @@ class RecurrentPPOClass:
                     ProgressBarCallback(),
                     BestResponseCallback(run_dir=run_dir),
                     TrainingProgressCallback(run_dir=run_dir),
+                    EpisodeStepRewardCallback(run_dir=run_dir),
                 ]
             ),
         )

@@ -12,10 +12,12 @@ from gymnasium import Env, spaces
 from config import (
     DELAY_FINAL,
     DELAY_INIT,
+    ELECTRODE_POSITION_PERTURBATION_SIGMA,
     NEURON_DT,
     NEURON_HUMAN_OR_MICE,
     NEURON_TEMP,
     NEURON_TYPES,
+    PERTURBATE_ELECTRODE_POSITION,
     SAMPLING_RATE,
     STIMULATION_DURATION,
 )
@@ -62,6 +64,8 @@ class NEURONEnv(Env):
             + 1  # neuron_type
             + self.waveform.n_params  # last_waveform_params
             + self.n_neuron_state_params  # last_stimulation_params
+            + self.waveform.n_params  # best_waveform_params
+            + 1  # best_reward
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(total_dim,), dtype=np.float64
@@ -73,12 +77,12 @@ class NEURONEnv(Env):
             "theta": np.float64(0.0),
             "phi": np.float64(0.0),
             "neuron_type": 0,
-            # TODO: change to actual bounds and types for these parameters
-            # also consider multi neuron criterions
             "last_waveform_params": np.zeros(self.waveform.n_params, dtype=float),
             "last_stimulation_params": np.zeros(
                 self.n_neuron_state_params, dtype=float
             ),
+            "best_waveform_params": np.zeros(self.waveform.n_params, dtype=float),
+            "best_reward": np.float64(0.0),
         }
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(self.waveform.n_params,), dtype=float
@@ -95,8 +99,7 @@ class NEURONEnv(Env):
         self.fr_tanh_scale = 300.0
 
         # Each neuron type gets its own Ray actor holding a single NEURON
-        # interpreter — running two cells in one process corrupts NEURON's
-        # global section/pointer state.
+        # instance. Cant run two neuron types in one process
         ensure_ray_initialized()
         self.actors = {
             nt: NeuronActor.remote(
@@ -120,6 +123,8 @@ class NEURONEnv(Env):
                 [float(self.state["neuron_type"])],
                 self.state["last_waveform_params"],
                 self.state["last_stimulation_params"],
+                self.state["best_waveform_params"],
+                [self.state["best_reward"]],
             ]
         ).astype(np.float64)
 
@@ -165,10 +170,10 @@ class NEURONEnv(Env):
         action = np.asarray(action, dtype=float).reshape(-1)
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
-        learnable_keys = list(self.waveform.param_bounds.keys())[:self.waveform.n_params]
-        action_dict = {
-            key: action[i] for i, key in enumerate(learnable_keys)
-        }
+        learnable_keys = list(self.waveform.param_bounds.keys())[
+            : self.waveform.n_params
+        ]
+        action_dict = {key: action[i] for i, key in enumerate(learnable_keys)}
 
         waveform, params = self.waveform.generate_waveform(
             duration=self.stimulation_duration,
@@ -180,9 +185,12 @@ class NEURONEnv(Env):
 
         reward = self.criterion.evaluate(waveform, responses)
 
-        self.state["last_waveform_params"] = np.array(
-            [params[key] for key in learnable_keys]
-        )
+        last_waveform_params = np.array([params[key] for key in learnable_keys])
+        self.state["last_waveform_params"] = last_waveform_params
+
+        if reward > self.state["best_reward"]:
+            self.state["best_reward"] = np.float64(reward)
+            self.state["best_waveform_params"] = last_waveform_params.copy()
 
         all_stimulation_params = []
         for r in responses:
@@ -305,21 +313,24 @@ class NEURONEnv(Env):
         self.state["electrode_radius"] = np.float64(1)
         self.state["theta"] = np.float64(0)
         self.state["phi"] = np.float64(0)
-        # self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
-        # self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
-        # self.state["phi"] = np.float64(phi)
+        self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
+        self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
+        self.state["phi"] = np.float64(phi)
         # self.state["neuron_type"] = int(random.choice(self.neuron_types))
         self.state["neuron_type"] = int(self.neuron_types[0])
 
         r = float(self.state["electrode_radius"])
         theta = float(self.state["theta"])
         phi = float(self.state["phi"])
-        # x = r * np.sin(phi) * np.cos(theta)
-        # y = r * np.sin(phi) * np.sin(theta)
-        # z = r * np.cos(phi)
-        x = 0
-        y = 1
-        z = 0
+        x = r * np.sin(phi) * np.cos(theta)
+        y = r * np.sin(phi) * np.sin(theta)
+        z = r * np.cos(phi)
+
+        if PERTURBATE_ELECTRODE_POSITION:
+            sigma = ELECTRODE_POSITION_PERTURBATION_SIGMA
+            x += random.gauss(0, sigma)
+            y += random.gauss(0, sigma)
+            z += random.gauss(0, sigma)
 
         default_waveform = self.default_stimulation()
 
@@ -342,9 +353,9 @@ class NEURONEnv(Env):
             neuron_stimulation_params.extend(self.get_stimulation_params(response))
         self.state["last_stimulation_params"] = np.array(neuron_stimulation_params)
 
-        self.state["last_waveform_params"] = np.zeros(
-            self.waveform.n_params
-        )  # No previous waveform parameters at reset
+        self.state["last_waveform_params"] = np.zeros(self.waveform.n_params)
+        self.state["best_waveform_params"] = np.zeros(self.waveform.n_params)
+        self.state["best_reward"] = np.float64(0.0)
 
         return self.get_obs(), {}
 

@@ -11,6 +11,7 @@ from stable_baselines3.common.noise import NormalActionNoise
 from callbacks import (
     BestResponseCallback,
     DiagnosticsCallback,
+    EpisodeStepRewardCallback,
     TrainingProgressCallback,
 )
 from criterions import MinEnergy, SelectivityCriterion
@@ -50,6 +51,7 @@ class SACClass:
                     BestResponseCallback(run_dir=run_dir),
                     TrainingProgressCallback(run_dir=run_dir),
                     DiagnosticsCallback(run_dir=run_dir),
+                    EpisodeStepRewardCallback(run_dir=run_dir),
                 ]
             ),
         )
