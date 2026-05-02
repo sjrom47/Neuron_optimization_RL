@@ -20,6 +20,7 @@ from config import (
     PERTURBATE_ELECTRODE_POSITION,
     SAMPLING_RATE,
     STIMULATION_DURATION,
+    MULTPLE_NEURON_TYPES,
 )
 from criterions import MinEnergy, SelectivityCriterion
 from elec_field import ICMS
@@ -316,8 +317,10 @@ class NEURONEnv(Env):
         self.state["electrode_radius"] = np.float64(random.uniform(0.5, 1.5))
         self.state["theta"] = np.float64(random.uniform(0.0, 2 * np.pi))
         self.state["phi"] = np.float64(phi)
-        # self.state["neuron_type"] = int(random.choice(self.neuron_types))
-        self.state["neuron_type"] = int(self.neuron_types[0])
+        if MULTPLE_NEURON_TYPES:
+            self.state["neuron_type"] = int(random.choice(self.neuron_types))
+        else:
+            self.state["neuron_type"] = int(self.neuron_types[0])
 
         r = float(self.state["electrode_radius"])
         theta = float(self.state["theta"])

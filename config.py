@@ -11,5 +11,8 @@ DELAY_FINAL = 5  # post-stimulus recording time
 SAMPLING_RATE = 1e5  # Hz
 
 # Electrode position perturbation
-PERTURBATE_ELECTRODE_POSITION = True
+PERTURBATE_ELECTRODE_POSITION = False
 ELECTRODE_POSITION_PERTURBATION_SIGMA = 0.01  # mm
+
+# Multiple neuron types
+MULTPLE_NEURON_TYPES = True

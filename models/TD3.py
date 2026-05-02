@@ -109,7 +109,7 @@ class TD3Class:
             target_noise_clip=0.5,
             policy_delay=2,
             tau=0.005,
-            gamma=0.99,
+            gamma=0.5,
             verbose=1,
         )
 
