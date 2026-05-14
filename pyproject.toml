@@ -1,7 +1,7 @@
 [project]
 name = "simulation"
 version = "0.1.0"
-description = "Add your description here"
+description = "RL-based stimulation waveform optimization using NEURON."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -22,3 +22,19 @@ dependencies = [
     "setuptools==80.9.0",
     "stable-baselines3[extra]>=2.7.1",
 ]
+
+[project.scripts]
+simulation-train = "simulation.training.train:main"
+simulation-compare = "simulation.training.compare_vs_bayesopt_baseline:main"
+simulation-point-electrode = "simulation.experiments.point_electrode:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["simulation*"]
+
+[tool.setuptools.package-data]
+simulation = ["neuron/assets/**/*"]
+
+[build-system]
+requires = ["setuptools>=68,<81"]
+build-backend = "setuptools.build_meta"

@@ -217,5 +217,8 @@ __marimo__/
 arm64/
 x86_64/
 weights/
+plots/
+TISimResults/
+extracellular_voltage/
 
 waveform_snapshots/

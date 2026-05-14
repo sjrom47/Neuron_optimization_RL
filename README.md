@@ -1,44 +1,115 @@
-# Policy gradient RL for waveform optimization using the NEURON simulator
+# RL Waveform Optimization With NEURON
 
-This repository contains code for a project on policy gradient reinforcement learning for optimizing stimulation waveforms using the NEURON simulator. The code is structured as follows:
-- `config.py`: Contains configuration parameters for the environment and training.
-- `environment.py`: Contains the implementation of the environment, including the state representation, action space, and reward function.
-- `train.py`: Contains the main training loop for the agent.
-- `requirements.txt`: Contains the required Python packages for running the code.
-Then there are several components with different versions that each have their own directory:
-- `criterions/`: includes a base abstract class for the reward criterion and two implementations: `MinEnergy` and `SelectivityCriterion`.
-- `models/`: includes the classes for the four different RL agents used and the necessary callbacks to create logs and plots during training.
-- `waveforms/`:  contains a base abstract class for the waveform and many concrete implementations of different waveforms
+This project trains reinforcement-learning agents to optimize neural stimulation waveforms in the NEURON simulator. It combines a Gymnasium environment, Stable-Baselines3 agents, custom waveform parameterizations, reward criteria, and NEURON cell/mechanism assets.
 
-### Running the code: 
-1. Install uv on your system (linux or WSL), run uv sync in the repo directory and then run the second command in the setup sh. As an alternative, you can also install the required packages using pip install -r requirements.txt. Additional installation steps may be necessary to install neuron in windows machines, so refer to the official neuron installation guide.
-2. Run the following command:
-```bash
-nrnivmodl mechanisms
-```
-Alternatively if you are using pip to install the dependencies, you can run the following command to compile the neuron mechanisms:
-```bash
-bash init_setup_run_once.sh
-```
-Which will perform steps 1 and 2 in one go.
+## Project Layout
 
-
-### Training the agent:
-```bash
-python train.py
+```text
+src/simulation/
+  agents/        Stable-Baselines3 agent wrappers
+  criteria/      Reward criteria such as minimum energy and selectivity
+  fields/        Electric-field models
+  neuron/        NEURON bridge code and simulator assets
+  training/      Training and evaluation entry points
+  waveforms/     Waveform parameterizations
+  environment.py Gymnasium environment
+  paths.py       Shared filesystem paths
+docs/            Project and NEURON asset documentation
+docs/images/     Static figures for the README (not generated training plots)
+scripts/         Setup and experiment helper scripts
+plots/           Generated training/evaluation plots
+weights/         Generated model checkpoints
 ```
 
-This will start the training process and save the trained model. It will use TD3 as the default agent. To change the agent and modify other training parameters such as the reward criterion, the number of episodes, the learning rate, etc. consult both the `config.py` file and the `train.py` arguments. 
+See `docs/project-structure.md` for more detail.
 
-### Comparing against bayesian optimization:
+## Example Results
 
-To compare the performance of the RL agent against a bayesian optimization approach, run the following command:
+These figures are checked in under `docs/images/` so the README can show them while the entire `plots/` directory stays gitignored for generated training output. They were produced from representative `debug_metrics.csv` runs that live under `plots/` locally.
+
+![TD3 episode return over training](docs/images/td3_episode_return.png)
+
+![TD3 waveform parameter trends](docs/images/td3_waveform_parameters.png)
+
+![TD3 spiking response versus reward](docs/images/td3_spikes_vs_reward.png)
+
+![SAC reward progress over timesteps](docs/images/sac_reward_progress.png)
+
+### RL vs Bayesian optimization
+
+This figure comes from `uv run simulation-compare` (TD3 on Fourier waveforms, minimum-energy criterion, two episodes, four steps per episode, seed 42). It shows the best waveforms from episode 1 for RL versus Ax BayesOpt.
+
+![Episode 1 waveforms: RL vs BayesOpt](docs/images/compare_bayesopt_td3_fourier_min_energy_episode01_waveforms.png)
+
+## Setup
+
+This project uses `uv` as the default package manager. Create the environment and install the package from the lockfile:
+
 ```bash
-python compare_vs_bayesopt_baseline.py
+uv sync
 ```
-This will compare the model of the RL agent against a bayesian optimization baseline and show the comparative results
 
+Compile NEURON mechanisms from the project root:
 
+```bash
+uv run nrnivmodl src/simulation/neuron/assets/mechanisms
+```
 
+The helper script runs both steps:
 
+```bash
+bash scripts/init_setup_run_once.sh
+```
 
+## Training
+
+After installation, train an agent with:
+
+```bash
+uv run simulation-train --model_type recurrentppo --waveform_type fourier --criterion_type min_energy
+```
+
+You can also run the module directly from the project root:
+
+```bash
+uv run python -m simulation.training.train
+```
+
+Useful options include `--model_type`, `--waveform_type`, `--criterion_type`, `--lr`, `--timesteps`, `--max_amplitude`, and `--normalize_obs`.
+
+Training writes plots to `plots/` and checkpoints to `weights/`.
+
+## Evaluation
+
+Compare a trained RL checkpoint against the Bayesian-optimization baseline:
+
+```bash
+uv run simulation-compare --model_type ppo --waveform_type fourier --criterion_type min_energy
+```
+
+If the default checkpoint name is not present, pass `--model_path` explicitly. Checkpoints trained before the observation vector included best-so-far waveform parameters and reward are still supported: the comparison script projects observations to the saved policy size when that legacy layout matches.
+
+To reproduce the BayesOpt figure above (after `uv sync` and NEURON setup):
+
+```bash
+uv run simulation-compare --model_type td3 --model_path weights/td3_fourier_min_energy_opt.zip \
+  --waveform_type fourier --criterion_type min_energy --episodes 2 --max_actions 4 --seed 42
+```
+
+Plots are written under `plots/compare_vs_bayesopt_baseline/<timestamp>_.../`; copy files from `episode_waveforms/` (or elsewhere in that run folder) into `docs/images/` if you want them in the README.
+
+## NEURON Assets
+
+HOC files, cell definitions, and MOD mechanisms live under `src/simulation/neuron/assets/`. Runtime code resolves these paths through `simulation.paths`, so commands do not depend on the current working directory. See `docs/neuron-assets.md` for compilation and save-state details.
+
+## Development Notes
+
+Add new waveform classes under `src/simulation/waveforms/`, criteria under `src/simulation/criteria/`, and agent wrappers under `src/simulation/agents/`. Keep exploratory scripts in `src/simulation/experiments/` unless they become reusable package code.
+
+`setuptools` is pinned below version 81 because newer versions deprecated behavior that the current NEURON toolchain still depends on.
+
+Generated outputs should stay out of commits. The main generated directories are `plots/`, `weights/`, `TISimResults/`, `arm64/`, and `x86_64/`.
+
+## Citation
+
+If you use the original cell-specific temporal-interference simulation assets, cite the work listed in `Citation.cff`.
