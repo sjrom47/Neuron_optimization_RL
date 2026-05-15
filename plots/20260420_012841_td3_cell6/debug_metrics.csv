@@ -1,1 +1,0 @@
-episode,timesteps,episode_return,episode_length,spikes_mean,state_fr_mean,state_peak_vm_mean,state_last_mp_mean,electrode_radius,theta,phi,period_mean,amplitude_mean,duty_cycle_mean,delay_mean,action_abs_mean,action_std,train_actor_loss,train_critic_loss

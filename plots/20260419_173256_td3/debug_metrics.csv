@@ -1,2 +1,0 @@
-timesteps,callback_step,reward_mean,reward_min,reward_max,done_rate,action_abs_mean,action_std,spikes_mean,state_fr_mean,state_peak_vm_mean,state_last_mp_mean,period_mean,amplitude_mean,duty_cycle_mean,delay_mean,train_actor_loss,train_critic_loss,train_ent_coef,train_ent_coef_loss
-400,50,0.2933688753032455,0.0,0.34912822924016146,1.0,0.49641511630971136,0.5629899258489877,0.0,0.0,-0.31564169548558363,-0.6637398249272357,19.20879868216527,683.1124291034387,0.45494585749023403,12.309343679686958,nan,nan,nan,nan
